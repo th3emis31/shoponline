@@ -17,15 +17,15 @@ This tracks every section of the NOVAHAUS Business Blueprint against what the co
 | E/F | 10 concepts / scorecard / test shortlist | ✅ | The 4 shortlisted products plus the Desk Reset bundle are seeded. Costs are ESTIMATES until supplier quotes 👤 |
 | G | Brand positioning | ✅ | Calm, honest copy. There are no fake reviews, timers or "only X left" badges, and illustrations are labelled. |
 | H | Website: launch pages | ✅ | Home, Shop, Product, Cart and checkout, About, Contact, FAQ, Shipping, Returns, Track, legal pages, 404 |
-| H | Shop "filter by room" | ⬜ | |
+| H | Shop "filter by room" | ✅ | `/shop?room=home-office` (also living room and bedroom). Every room page is in the sitemap |
 | H | Contact **form** (not only email) | ✅ | `/contact`, with a spam trap and rate limit. The customer gets an automatic acknowledgement |
-| H | Buying guides / blog | ⬜ | |
+| H | Buying guides / blog | ✅ | `/guides`: 3 practical guides with no invented statistics (the screen-height guide cites HSE guidance). Each links to the matching products |
 | H | Social proof only once real reviews exist | ✅ | Verified-buyer reviews through a signed link (order email and order page). You check them in Admin > Reviews, and negative reviews can't be hidden. The product page and Google rating appear only after the first published review |
 | I | Waitlist smoke test | ✅ | "Notify me" with explicit consent, and sign-ups per product in admin |
 | I | Email flows: welcome 5, abandoned cart 4, post-purchase 5, win-back 1 | ✅ | `services/emails.py`, plus order confirmation, shipped and the launch email. You read them in Admin > Emails; they're sent once SMTP is set (DEPLOY.md step 6b) |
 | I | Consent rules (opt-in, no pre-ticked boxes) | ✅ | Unticked boxes; the waitlist only gets the launch email; consent is re-checked before every send; one-click unsubscribe |
 | I | Per-campaign tracking: CTR, CPC, CAC, ROAS, **contribution after ads** | ✅ | Admin > Campaigns. Ad links carry `utm_source` / `utm_campaign`; you type in the ad cost; each campaign gets a plain-English verdict. No visitor tracking; only the campaign name is kept, for that tab |
-| I | Google Shopping product feed | ⬜ | |
+| I | Google Shopping product feed | ✅ | `/feed/google.xml`. A product appears only once a **real photo** is in `frontend/public/products/` 👤 |
 | J | Approval gate + audit log | ✅ | Admin > Approvals, and the audit log with who did what |
 | J | Automation within limits | ✅ | Reorders, the margin guard, abandoned checkouts, backups, the daily report |
 | J | AI provider interface (local Ollama / external API / future) | ✅ | `services/ai/providers.py`. Built-in rules are free and the default; Ollama runs locally; any OpenAI-compatible API works (personal data removed, daily cap). If the AI service fails, the built-in rules are used |

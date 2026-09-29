@@ -176,3 +176,11 @@ footer.site .footer-signup { grid-column: 1 / -1; max-width: 560px; }
 .ai-line.ai-assumption { border-color: #c79a3e; }
 .ai-line.ai-estimate { border-color: #4c86ad; }
 .ai-line.ai-hypothesis { border-color: #9b6bb0; }
+
+/* Shop filters and guides */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.chips a { border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; text-decoration: none; color: var(--ink); background: var(--surface); }
+.chips a[aria-current="page"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.guide-list { list-style: none; padding: 0; }
+.guide-list li { border-top: 1px solid var(--line); padding: 14px 0; }
+.guide-list p { margin: 4px 0 0; }

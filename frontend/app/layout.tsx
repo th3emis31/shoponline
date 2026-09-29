@@ -35,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="main" aria-label="Main">
               <Link href="/shop">Shop</Link>
               <Link href="/about">About</Link>
+              <Link href="/guides">Guides</Link>
               <Link href="/faq">FAQ</Link>
               <Link href="/track">Track order</Link>
               <CartBadge />
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/about">About</Link>
               <Link href="/contact">Contact</Link>
               <Link href="/faq">FAQ</Link>
+              <Link href="/guides">Guides</Link>
             </div>
             <div>
               <Link href="/shipping">Shipping</Link>

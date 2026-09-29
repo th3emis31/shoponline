@@ -10,7 +10,16 @@ export type CatalogEntry = {
   benefits: string[];
   included: string[];
   verified: boolean;
+  /** Rooms it's designed for (shop "filter by room"). */
+  rooms: RoomId[];
 };
+
+export const ROOMS = {
+  "home-office": "Home office",
+  "living-room": "Living room",
+  bedroom: "Bedroom",
+} as const;
+export type RoomId = keyof typeof ROOMS;
 
 export const BUNDLE_PARTS = ["desk-mat", "cable-tray", "cable-clips"] as const;
 export const BUNDLE_ID = "desk-reset";
@@ -26,6 +35,7 @@ export const catalog: Record<string, CatalogEntry> = {
     ],
     included: ["1 desk mat, 90 × 40 cm"],
     verified: false,
+    rooms: ["home-office"],
   },
   "cable-tray": {
     tagline: "Hide the cable mess under your desk, with no drilling.",
@@ -37,6 +47,7 @@ export const catalog: Record<string, CatalogEntry> = {
     ],
     included: ["1 steel cable tray", "2 clamps", "Fit guide for desk thickness"],
     verified: false,
+    rooms: ["home-office", "living-room"],
   },
   "cable-clips": {
     tagline: "Chargers stay where you left them.",
@@ -48,6 +59,7 @@ export const catalog: Record<string, CatalogEntry> = {
     ],
     included: ["Set of cable clips"],
     verified: false,
+    rooms: ["home-office", "living-room", "bedroom"],
   },
   "monitor-riser": {
     tagline: "Screen at eye level, clutter in the drawer.",
@@ -59,6 +71,7 @@ export const catalog: Record<string, CatalogEntry> = {
     ],
     included: ["1 oak monitor riser with drawer"],
     verified: false,
+    rooms: ["home-office"],
   },
   "desk-reset": {
     tagline: "Everything for a tidy desk, in one parcel.",
@@ -71,9 +84,14 @@ export const catalog: Record<string, CatalogEntry> = {
     ],
     included: ["1 desk mat", "1 cable tray with clamps", "Set of cable clips"],
     verified: false,
+    rooms: ["home-office"],
   },
 };
 
 export function entry(id: string): CatalogEntry | undefined {
   return catalog[id];
+}
+
+export function isRoom(value: string | undefined): value is RoomId {
+  return !!value && Object.prototype.hasOwnProperty.call(ROOMS, value);
 }
