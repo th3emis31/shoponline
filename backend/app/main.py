@@ -76,7 +76,9 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
         return shop.order_view(shop.checkout(db, cart_id, body.name, str(body.email), body.address))
 
     # Stock is reserved now and released if payment fails or the session expires.
-    order = shop.checkout(db, cart_id, body.name, str(body.email), body.address, status="pending_payment")
+    # The cart is kept until Stripe accepts the session, so an outage never loses it.
+    order = shop.checkout(db, cart_id, body.name, str(body.email), body.address,
+                          status="pending_payment", delete_cart=False)
     try:
         session_id, url = payments.create_checkout_session(order)
     except Exception as exc:
@@ -85,6 +87,7 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
         db.commit()
         raise ShopError("Payment provider unavailable, please try again", 502) from exc
     order.stripe_session_id = session_id
+    db.delete(shop.get_cart(db, cart_id))
     db.commit()
     return {**shop.order_view(order), "checkout_url": url}
 

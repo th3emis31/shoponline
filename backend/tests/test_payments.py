@@ -65,13 +65,16 @@ def stock(db, product_id):
 
 
 def test_checkout_returns_stripe_url_and_reserves_stock(client, db, stripe_on):
-    r = place_order(client)
+    cid = client.post("/api/carts").json()["id"]
+    client.post(f"/api/carts/{cid}/items", json={"product_id": "desk-mat", "quantity": 1})
+    r = client.post(f"/api/carts/{cid}/checkout", json=CUSTOMER)
     assert r.status_code == 201
     assert r.json()["checkout_url"] == FakeSession.url
     assert r.json()["status"] == "pending_payment"
     assert stock(db, "desk-mat") == 49
     with db() as s:
         assert s.get(Order, r.json()["id"]).stripe_session_id == FakeSession.id
+    assert client.get(f"/api/carts/{cid}").status_code == 404  # cart cleared once Stripe accepted
 
 
 def test_paid_webhook_marks_order_paid(client, db, stripe_on):
@@ -148,11 +151,16 @@ def test_stripe_outage_cancels_order_and_releases_stock(client, db, stripe_on, m
         raise RuntimeError("stripe down")
 
     monkeypatch.setattr(payments, "create_checkout_session", boom)
-    r = place_order(client, "cable-tray", 2)
+    cid = client.post("/api/carts").json()["id"]
+    client.post(f"/api/carts/{cid}/items", json={"product_id": "cable-tray", "quantity": 2})
+    r = client.post(f"/api/carts/{cid}/checkout", json=CUSTOMER)
     assert r.status_code == 502
     assert stock(db, "cable-tray") == 50
     with db() as s:
         assert [o.status for o in s.query(Order).all()] == ["cancelled"]
+    # The customer's cart survives the outage so they can simply retry.
+    cart = client.get(f"/api/carts/{cid}").json()
+    assert cart["items"][0]["quantity"] == 2
 
 
 def test_session_params_are_correct(monkeypatch):

@@ -67,7 +67,31 @@ python -m pytest -q                                    # tests (set TEST_DATABAS
 
 CI (`.github/workflows/ci.yml`) runs the Node tests and the backend tests on SQLite and on PostgreSQL 16 for every push.
 
+## Storefront (Next.js), Blueprint section H
+
+The `frontend/` folder holds the customer-facing site. It is rendered on the server, and it talks to the backend through a same-origin `/api` proxy. The proxy reads `API_URL` on each request, so one build works in any environment, and it blocks the admin endpoints.
+
+**Pages:**
+- **Shopping:** Home, Shop, Product, Cart with checkout, Order confirmation, Track order
+- **Information:** About, Contact, FAQ, Shipping, Returns
+- **Legal:** Privacy, Terms, Cookies, plus a 404 page
+
+Checkout follows the blueprint's rules: guest checkout, only name, email and address asked for, delivery cost and total shown before payment, and no marketing box.
+
+Honesty rules from the blueprint are built in. There are no reviews, countdown timers or "only X left" badges. Specs and photos will come from the real sample, never stock images. A "Preview site" banner stays up until `launchReady` is set in `lib/site.ts`.
+
+```bash
+cd frontend
+npm install
+npm run dev            # http://localhost:3000 (backend must run on :8000)
+npm run typecheck && npm test                  # type check + unit tests
+npm run build && npm run test:e2e              # browser tests, desktop + mobile (these start the backend themselves)
+```
+
+**Before launch:** fill in every `TODO` in `frontend/lib/site.ts` and on the Shipping, Returns and legal pages. The legal pages are placeholders that need professional review.
+
 ## Next steps (pending blueprint approval)
 - Pick the stack: Blueprint section K recommends FastAPI + PostgreSQL + Next.js; Shopify is the faster alternative
-- Next.js storefront on top of the backend API
-- Launch pages: About, Contact, FAQ, Shipping, Returns, Legal
+- Admin app (orders, stock, live break-even ROAS)
+- Analytics funnel events: view → add-to-cart → checkout → purchase
+- Real product specs and photos once samples arrive

@@ -80,7 +80,7 @@ def remove_item(db: Session, cart_id: str, product_id: str) -> Cart:
 
 
 def checkout(db: Session, cart_id: str, name: str, email: str, address: str,
-             status: str = "placed") -> Order:
+             status: str = "placed", delete_cart: bool = True) -> Order:
     cart = get_cart(db, cart_id)
     view = cart_view(cart)
     if not view["items"]:
@@ -105,7 +105,8 @@ def checkout(db: Session, cart_id: str, name: str, email: str, address: str,
                    for l in view["items"]],
         )
         db.add(order)
-        db.delete(cart)
+        if delete_cart:
+            db.delete(cart)
         db.commit()
     except Exception:
         db.rollback()  # all-or-nothing: no partial stock deduction
