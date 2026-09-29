@@ -1,0 +1,10 @@
+fastapi==0.141.1
+SQLAlchemy==2.1.1
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+uvicorn==0.54.0
+psycopg[binary]==3.3.6
+# tests
+pytest==9.1.1
+httpx==0.28.1
