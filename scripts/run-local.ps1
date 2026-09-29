@@ -34,8 +34,17 @@ foreach ($cand in @(@("py", "-3"), @("python"), @("python3"))) {
     }
   }
 }
-if (-not $Python) { Fail "Python 3.11+ not found. Install it from https://www.python.org/downloads/ (tick 'Add python.exe to PATH'), then reopen Command Prompt." }
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) { Fail "Node.js not found. Install the LTS version from https://nodejs.org/, then reopen Command Prompt." }
+if (-not $Python) {
+  $hint = "Install it with:  winget install -e --id Python.Python.3.12`n  (or from https://www.python.org/downloads/ and tick 'Add python.exe to PATH')`nThen CLOSE this window, open a new Command Prompt and run run-local.cmd again."
+  $stub = Get-Command python -ErrorAction SilentlyContinue
+  if ($stub -and $stub.Source -like "*WindowsApps*") {
+    $hint = "Only the Microsoft Store shortcut for 'python' was found, not a real Python.`n" + $hint
+  }
+  Fail "Python 3.11+ not found.`n$hint"
+}
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  Fail "Node.js not found.`nInstall it with:  winget install -e --id OpenJS.NodeJS.LTS`n  (or the LTS version from https://nodejs.org/)`nThen CLOSE this window, open a new Command Prompt and run run-local.cmd again."
+}
 $nodeMajor = [int]((& node -p "process.versions.node.split('.')[0]").Trim())
 if ($nodeMajor -lt 20) { Fail "Node.js 20+ required (found $nodeMajor). Install the LTS version from https://nodejs.org/." }
 $npm = "npm"
