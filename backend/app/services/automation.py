@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import (AnalyticsEvent, AutomationRun, Cart, CartItem, DailyReport, JobLease, Order, Product,
-                      PurchaseOrder, Recommendation)
+                      PurchaseOrder, Recommendation, SupplierOrder)
 from . import payments, unit_economics
 from .admin import audit
 from .shop import ShopError
@@ -213,8 +213,8 @@ def job_close_abandoned_checkouts(db: Session) -> str:
 def job_low_stock(db: Session) -> str:
     created = []
     for p in db.scalars(select(Product).where(Product.active.is_(True))):
-        if p.stock > p.reorder_point:
-            continue
+        if p.is_dropship or p.stock > p.reorder_point:
+            continue  # dropship products have no stock of our own
         open_po = db.scalar(select(func.count()).select_from(PurchaseOrder).where(
             PurchaseOrder.product_id == p.id, PurchaseOrder.status.in_(OPEN_PO)))
         pending = db.scalar(select(func.count()).select_from(Recommendation).where(
@@ -235,9 +235,10 @@ def job_low_stock(db: Session) -> str:
 
 def price_for_margin(p: Product, min_margin: float) -> int | None:
     """Lowest price (rounded up to 50p) that meets min_margin, or None if unreachable."""
+    from .admin import economics
     price = p.price
     for _ in range(400):  # up to +GBP 200 in 50p steps
-        ue = unit_economics.calculate(price, p.landed_cost, p.shipping_cost, p.packaging_cost)
+        ue = economics(p, price)
         if ue.contribution_margin >= min_margin:
             return price
         price = int(math.floor(price / 50) * 50) + 50
@@ -246,8 +247,11 @@ def price_for_margin(p: Product, min_margin: float) -> int | None:
 
 def job_margin_guard(db: Session) -> str:
     created = []
+    from .admin import economics
     for p in db.scalars(select(Product).where(Product.active.is_(True))):
-        ue = unit_economics.calculate(p.price, p.landed_cost, p.shipping_cost, p.packaging_cost)
+        if p.is_dropship and p.supplier_cost <= 0:
+            continue  # supplier price not entered yet: nothing to judge
+        ue = economics(p)
         if ue.contribution_margin >= settings.min_contribution_margin:
             continue
         pending = db.scalar(select(func.count()).select_from(Recommendation).where(
@@ -301,11 +305,13 @@ def build_report(db: Session, day: datetime) -> str:
         for item in o.items:
             p = db.get(Product, item.product_id)
             if p:
-                ue = unit_economics.calculate(item.unit_price, p.landed_cost, p.shipping_cost, p.packaging_cost)
-                contribution += ue.contribution_pre_ads * item.quantity
+                from .admin import economics
+                contribution += economics(p, item.unit_price).contribution_pre_ads * item.quantity
     events = dict(db.execute(select(AnalyticsEvent.type, func.count()).where(
         AnalyticsEvent.created_at >= start, AnalyticsEvent.created_at < end).group_by(AnalyticsEvent.type)).all())
-    low = [p for p in db.scalars(select(Product).where(Product.active.is_(True))) if p.stock <= p.reorder_point]
+    low = [p for p in db.scalars(select(Product).where(Product.active.is_(True)))
+           if not p.is_dropship and p.stock <= p.reorder_point]
+    to_buy = db.scalar(select(func.count()).select_from(SupplierOrder).where(SupplierOrder.status == "to_order"))
     pending = db.scalar(select(func.count()).select_from(Recommendation).where(Recommendation.status == "pending"))
     review = db.scalar(select(func.count()).select_from(Order).where(Order.status == "payment_review"))
     to_ship = db.scalar(select(func.count()).select_from(Order).where(Order.status.in_(("paid", "placed"))))
@@ -326,6 +332,7 @@ def build_report(db: Session, day: datetime) -> str:
         "",
         "## Needs attention",
         f"- Orders to ship: {to_ship}",
+        f"- Supplier orders to place (dropship): {to_buy}",
         f"- Payments to review: {review}",
         f"- Approvals waiting: {pending}",
         f"- Low stock: {', '.join(f'{p.name} ({p.stock})' for p in low) or 'none'}",

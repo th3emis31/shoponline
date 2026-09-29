@@ -8,7 +8,7 @@ export const metadata: Metadata = { title: "FAQ" };
 const faqs: { q: string; a: React.ReactNode }[] = [
   {
     q: "Why not just buy a cheaper one on a marketplace?",
-    a: "We name every material exactly, publish measured dimensions, and dispatch from the UK with simple returns, so you know what you're getting before it arrives.",
+    a: "We name every material exactly, publish measured dimensions, show an honest delivery time on every product, and keep returns simple, so you know what you're getting before it arrives.",
   },
   {
     q: "Will it fit my desk?",

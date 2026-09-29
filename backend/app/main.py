@@ -41,7 +41,9 @@ def shop_error_handler(_: Request, exc: ShopError):
 
 
 def to_public(p: Product) -> ProductOut:
-    return ProductOut(id=p.id, name=p.name, price=p.price, is_bundle=p.is_bundle, in_stock=p.stock > 0)
+    return ProductOut(id=p.id, name=p.name, price=p.price, is_bundle=p.is_bundle,
+                      in_stock=p.is_dropship or p.stock > 0,
+                      delivery_estimate=p.delivery_estimate or None)
 
 
 @app.get("/api/health")
@@ -90,7 +92,8 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
             raise ShopError("Checkout is temporarily unavailable. Please try again later.", 503)
         # Development mode: no payment provider configured, order is just placed.
         order = shop.checkout(db, cart_id, body.name, str(body.email), body.address)
-        analytics.record(db, "purchase")
+        orders_svc.create_supplier_orders(db, order.id)
+        analytics.record(db, "purchase")  # commits
         return shop.order_view(order)
 
     # Stock is reserved now and released if payment fails or the session expires.

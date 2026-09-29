@@ -59,6 +59,7 @@ export default async function ProductPage({ params }: Props) {
           <AddToCart productId={product.id} inStock={product.in_stock} />
         </div>
         <ul className="ticks">
+          {product.delivery_estimate && <li data-testid="delivery-estimate">Delivery in {product.delivery_estimate}</li>}
           <li>UK delivery {formatGBP(site.shippingFee)}, free over {formatGBP(site.freeShippingThreshold)}</li>
           <li>{site.returnDays}-day returns</li>
           <li>Secure payment by Stripe</li>

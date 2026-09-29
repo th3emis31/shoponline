@@ -12,8 +12,8 @@ export default function About() {
         flats, house shares and home offices.
       </p>
       <p>
-        We name our materials exactly, publish measured dimensions, photograph the real product, dispatch from
-        the UK and keep returns simple.
+        We name our materials exactly, publish measured dimensions, photograph the real product, show an
+        honest delivery time on every product and keep returns simple.
       </p>
       <h2>Who we are</h2>
       <p><span className="todo">{site.legalName}</span>, <span className="todo">{site.address}</span></p>

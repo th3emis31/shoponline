@@ -4,6 +4,7 @@ export type Product = {
   price: number; // pence, inc. VAT
   is_bundle: boolean;
   in_stock: boolean;
+  delivery_estimate?: string | null;
 };
 
 export type CartLine = {

@@ -12,7 +12,7 @@ def test_products_hide_internal_costs(client):
     assert r.status_code == 200
     assert len(r.json()) == 5
     for p in r.json():
-        assert set(p) == {"id", "name", "price", "is_bundle", "in_stock"}
+        assert set(p) == {"id", "name", "price", "is_bundle", "in_stock", "delivery_estimate"}
     assert client.get("/api/products/nope").status_code == 404
 
 

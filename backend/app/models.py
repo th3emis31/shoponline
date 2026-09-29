@@ -34,6 +34,19 @@ class Product(Base):
     # Automation: when stock falls to reorder_point, suggest ordering reorder_qty.
     reorder_point: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
     reorder_qty: Mapped[int] = mapped_column(Integer, default=20, server_default="20")
+    # Fulfilment: "stock" (you hold it) or "dropship" (the supplier ships it straight to
+    # the customer after they pay, so you never buy stock upfront).
+    fulfilment: Mapped[str] = mapped_column(String(10), default="stock", server_default="stock")
+    supplier_name: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    supplier_url: Mapped[str] = mapped_column(String(1000), default="", server_default="")
+    # What the supplier charges you per unit INCLUDING delivery to the customer (pence).
+    supplier_cost: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Shown to customers, e.g. "7-12 working days". Must be honest.
+    delivery_estimate: Mapped[str] = mapped_column(String(100), default="", server_default="")
+
+    @property
+    def is_dropship(self) -> bool:
+        return self.fulfilment == "dropship"
 
 
 class Cart(Base):
@@ -91,6 +104,8 @@ class OrderItem(Base):
     name: Mapped[str] = mapped_column(String(200))
     unit_price: Mapped[int] = mapped_column(Integer)
     quantity: Mapped[int] = mapped_column(Integer)
+    # False for dropship lines: nothing was taken from our stock, so nothing is given back.
+    from_stock: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     order: Mapped[Order] = relationship(back_populates="items")
 
 
@@ -229,6 +244,29 @@ class WaitlistSignup(Base):
     product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     consent_text: Mapped[str] = mapped_column(Text)  # exactly what the person agreed to
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class SupplierOrder(Base):
+    """What to buy from the supplier for a paid dropship order line.
+    to_order -> ordered (supplier ref) -> shipped (tracking) -> delivered | problem."""
+
+    __tablename__ = "supplier_orders"
+    __table_args__ = (UniqueConstraint("order_id", "product_id", name="supplier_order_line"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"), index=True)
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id"))
+    quantity: Mapped[int] = mapped_column(Integer)
+    supplier_name: Mapped[str] = mapped_column(String(200))
+    supplier_url: Mapped[str] = mapped_column(String(1000))
+    supplier_cost_total: Mapped[int] = mapped_column(Integer)  # pence
+    sale_total: Mapped[int] = mapped_column(Integer)  # what the customer paid for this line, inc. VAT
+    status: Mapped[str] = mapped_column(String(16), default="to_order", index=True)
+    supplier_ref: Mapped[str] = mapped_column(String(200), default="")
+    tracking: Mapped[str] = mapped_column(String(300), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class JobLease(Base):

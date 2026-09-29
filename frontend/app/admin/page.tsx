@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ApprovalsTab, AutomationTab, PurchaseOrdersTab } from "@/components/admin/AutomationTabs";
+import { ProductForm, SupplierOrdersTab } from "@/components/admin/DropshipTabs";
 import { formatGBP } from "@/lib/money";
 
 const TOKEN_KEY = "novahaus.adminToken";
-type Tab = "orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit";
+type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit";
 const TAB_LABEL: Record<Tab, string> = {
-  orders: "Orders", approvals: "Approvals", automation: "Automation", "purchase-orders": "Purchase orders",
-  products: "Products", funnel: "Funnel", audit: "Audit",
+  orders: "Orders", "supplier-orders": "Supplier orders", approvals: "Approvals", automation: "Automation",
+  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit",
 };
 
 type AdminOrder = {
@@ -20,6 +21,8 @@ type AdminProduct = {
   id: string; name: string; price: number; stock: number; active: boolean; landed_cost: number;
   shipping_cost: number; packaging_cost: number; contribution_pre_ads: number;
   contribution_margin: number; break_even_roas: number | null;
+  fulfilment: "stock" | "dropship"; supplier_name: string; supplier_url: string;
+  supplier_cost: number; delivery_estimate: string;
 };
 type Funnel = { days: number; steps: { type: string; count: number; rate_from_previous: number | null }[]; overall_conversion: number | null };
 type Audit = { id: number; action: string; target: string; actor: string | null; detail: Record<string, unknown>; created_at: string };
@@ -107,7 +110,7 @@ export default function AdminPage() {
   }
 
   const tabs: Tab[] = me?.role === "owner"
-    ? ["orders", "approvals", "automation", "purchase-orders", "products", "funnel", "audit"]
+    ? ["orders", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "funnel", "audit"]
     : ["orders"];
 
   async function changeStatus(id: string, status: string) {
@@ -123,9 +126,18 @@ export default function AdminPage() {
     const f = new FormData(form);
     const num = (k: string) => Math.round(Number(f.get(k)));
     const pounds = (k: string) => Math.round(Number(f.get(k)) * 100);
+    const dropship = f.get("fulfilment") === "dropship";
     const body = {
-      stock: num("stock"), price: pounds("price"), active: f.get("active") === "on",
-      landed_cost: pounds("landed_cost"), note: String(f.get("note") ?? ""),
+      price: pounds("price"), active: f.get("active") === "on", note: String(f.get("note") ?? ""),
+      fulfilment: dropship ? "dropship" : "stock",
+      delivery_estimate: String(f.get("delivery_estimate") ?? ""),
+      ...(dropship
+        ? {
+            supplier_name: String(f.get("supplier_name") ?? ""),
+            supplier_url: String(f.get("supplier_url") ?? ""),
+            supplier_cost: pounds("supplier_cost"),
+          }
+        : { stock: num("stock"), landed_cost: pounds("landed_cost") }),
     };
     try {
       await call(`products/${id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -213,24 +225,13 @@ export default function AdminPage() {
           {products.map((p) => (
             // Key includes the values: when fresh data arrives the form is rebuilt, so it can
             // never show (and then save back) stale numbers.
-            <form key={`${p.id}:${p.price}:${p.landed_cost}:${p.stock}:${p.active}`} className="panel stack" data-testid={`product-${p.id}`}
-                  onSubmit={(e) => { e.preventDefault(); saveProduct(p.id, e.currentTarget); }}>
-              <strong>{p.name}</strong>
-              <div className="muted" style={{ fontSize: "0.9rem" }}>
-                Contribution before ads: <strong>{formatGBP(p.contribution_pre_ads)}</strong> ({pct(p.contribution_margin)})<br />
-                Break-even ROAS: <strong data-testid="roas">{p.break_even_roas == null ? "never profitable" : p.break_even_roas.toFixed(2)}</strong>
-                <br /><em>ESTIMATE until supplier quotes</em>
-              </div>
-              <label>Price inc. VAT (£)<input name="price" type="number" step="0.01" min="0.01" defaultValue={(p.price / 100).toFixed(2)} /></label>
-              <label>Landed cost (£)<input name="landed_cost" type="number" step="0.01" min="0" defaultValue={(p.landed_cost / 100).toFixed(2)} /></label>
-              <label>Stock<input name="stock" type="number" min="0" step="1" defaultValue={p.stock} /></label>
-              <label style={{ display: "flex", gap: 8, alignItems: "center" }}><input name="active" type="checkbox" defaultChecked={p.active} /> Visible in shop</label>
-              <label>Reason for change (audit log)<input name="note" maxLength={500} /></label>
-              <button className="btn" type="submit">Save</button>
-            </form>
+            <ProductForm key={`${p.id}:${p.price}:${p.landed_cost}:${p.stock}:${p.active}:${p.fulfilment}:${p.supplier_cost}:${p.supplier_url}:${p.delivery_estimate}`}
+                         p={p} onSave={saveProduct} />
           ))}
         </div>
       )}
+
+      {tab === "supplier-orders" && <SupplierOrdersTab call={call} onError={setError} />}
 
       {tab === "funnel" && funnel && (
         <>

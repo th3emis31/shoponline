@@ -1,14 +1,16 @@
 import json
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_session
 from .ratelimit import limit
 from .security import require_admin, require_owner
-from .models import DailyReport, PurchaseOrder, Recommendation, WaitlistSignup
+from .models import DailyReport, PurchaseOrder, Recommendation, SupplierOrder, WaitlistSignup
 from .services import admin, analytics, auth, automation, shop
 from .services.auth import Principal
 
@@ -51,7 +53,20 @@ class ProductPatch(BaseModel):
     landed_cost: int | None = Field(default=None, ge=0, le=10_000_00)
     shipping_cost: int | None = Field(default=None, ge=0, le=10_000_00)
     packaging_cost: int | None = Field(default=None, ge=0, le=10_000_00)
+    fulfilment: Literal["stock", "dropship"] | None = None
+    supplier_name: str | None = Field(default=None, max_length=200)
+    supplier_url: str | None = Field(default=None, max_length=1000)
+    supplier_cost: int | None = Field(default=None, ge=0, le=10_000_00)
+    delivery_estimate: str | None = Field(default=None, max_length=100)
     note: str = Field(default="", max_length=500)
+
+    @field_validator("supplier_url")
+    @classmethod
+    def http_only(cls, v: str | None) -> str | None:
+        # Only real web links (never javascript: etc.), since admins click them.
+        if v and not v.lower().startswith(("https://", "http://")):
+            raise ValueError("Supplier link must start with https://")
+        return v.strip() if v else v
 
 
 def next_for(o, role: str) -> list[str]:
@@ -202,3 +217,78 @@ def waitlist(db: Session = Depends(get_session)):
         "by_product": [{"product_id": pid or "(whole shop)", "count": n} for pid, n in sorted(rows, key=lambda r: -r[1])],
         "recent": [{"email": w.email, "product_id": w.product_id, "created_at": w.created_at} for w in recent],
     }
+
+
+# ---------------------------------------------------------------- dropship supplier orders (owner only)
+
+SUPPLIER_TRANSITIONS = {
+    "to_order": {"ordered", "problem"},
+    "ordered": {"shipped", "problem"},
+    "shipped": {"delivered", "problem"},
+    "problem": {"to_order", "ordered", "shipped", "delivered"},
+    "delivered": set(),
+}
+
+
+class SupplierOrderIn(BaseModel):
+    status: str | None = Field(default=None, max_length=16)
+    supplier_ref: str | None = Field(default=None, max_length=200)
+    tracking: str | None = Field(default=None, max_length=300)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+def supplier_out(so: SupplierOrder) -> dict:
+    from .services import unit_economics
+    # Profit ESTIMATE: sale ex VAT, minus supplier price, minus the Stripe fee on this line.
+    fee = float(unit_economics.STRIPE_UK_PERCENT) * so.sale_total
+    profit = round(so.sale_total / (1 + float(unit_economics.VAT_RATE)) - so.supplier_cost_total - fee)
+    return {"id": so.id, "order_id": so.order_id, "product_id": so.product_id, "quantity": so.quantity,
+            "supplier_name": so.supplier_name, "supplier_url": so.supplier_url,
+            "supplier_cost_total": so.supplier_cost_total, "sale_total": so.sale_total,
+            "profit_estimate": profit, "status": so.status, "supplier_ref": so.supplier_ref,
+            "tracking": so.tracking, "note": so.note, "created_at": so.created_at,
+            "next_statuses": sorted(SUPPLIER_TRANSITIONS.get(so.status, set()))}
+
+
+@router.get("/supplier-orders", dependencies=[Depends(require_owner)])
+def supplier_orders(status: str | None = None, db: Session = Depends(get_session)):
+    q = select(SupplierOrder).order_by(SupplierOrder.id.desc()).limit(300)
+    if status:
+        q = q.where(SupplierOrder.status == status)
+    rows = []
+    for so in db.scalars(q):
+        order = db.get(admin.Order, so.order_id)
+        rows.append({**supplier_out(so),
+                     # Needed to place the order with the supplier (ship straight to the customer).
+                     "ship_to_name": order.customer_name if order else "",
+                     "ship_to_address": order.shipping_address if order else ""})
+    return rows
+
+
+@router.post("/supplier-orders/{so_id}")
+def update_supplier_order(so_id: int, body: SupplierOrderIn, db: Session = Depends(get_session),
+                          principal: Principal = Depends(require_owner)):
+    from sqlalchemy import update
+    from datetime import datetime, timezone
+    so = db.get(SupplierOrder, so_id)
+    if so is None:
+        raise shop.ShopError("Supplier order not found", 404)
+    old = so.status
+    values = {k: v for k, v in body.model_dump(exclude={"status"}).items() if v is not None}
+    if body.status and body.status != old:
+        if body.status not in SUPPLIER_TRANSITIONS.get(old, set()):
+            raise shop.ShopError(f"Cannot change {old} to {body.status}", 409)
+        values["status"] = body.status
+    if not values:
+        raise shop.ShopError("No changes given")
+    values["updated_at"] = datetime.now(timezone.utc)
+    moved = db.execute(update(SupplierOrder).where(SupplierOrder.id == so_id, SupplierOrder.status == old)
+                       .values(**values).execution_options(synchronize_session="fetch")).rowcount == 1
+    if not moved:
+        db.rollback()
+        raise shop.ShopError("This supplier order changed meanwhile. Reload and try again.", 409)
+    admin.audit(db, "supplier_order.update", str(so_id), actor=principal.actor, old=old,
+                **{k: v for k, v in values.items() if k != "updated_at"})
+    db.commit()
+    db.refresh(so)
+    return supplier_out(so)

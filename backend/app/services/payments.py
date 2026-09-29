@@ -148,6 +148,7 @@ def _mark_paid(db: Session, order: Order, session: dict) -> None:
     if amount_ok and currency_ok:
         if orders.move(db, order.id, {"pending_payment"}, "paid", paid_at=datetime.now(timezone.utc)):
             analytics.record(db, "purchase", commit=False)
+            orders.create_supplier_orders(db, order.id)  # dropship lines: what to buy
             return
     elif orders.move(db, order.id, {"pending_payment"}, "payment_review"):
         return  # never ship on a mismatched amount; a human must review

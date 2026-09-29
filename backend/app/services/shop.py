@@ -60,7 +60,7 @@ def add_item(db: Session, cart_id: str, product_id: str, quantity: int) -> Cart:
     new_qty = (item.quantity if item else 0) + quantity
     if new_qty > settings.max_qty_per_item:
         raise ShopError(f"Maximum {settings.max_qty_per_item} per item")
-    if new_qty > product.stock:
+    if not product.is_dropship and new_qty > product.stock:
         raise ShopError("Not enough stock", 409)
     if item:
         item.quantity = new_qty
@@ -87,8 +87,15 @@ def checkout(db: Session, cart_id: str, name: str, email: str, address: str,
         raise ShopError("Cart is empty")
 
     try:
-        # Atomic conditional decrement: never oversells, even under concurrency.
+        from_stock: dict[str, bool] = {}
         for line in view["items"]:
+            product = db.get(Product, line["product_id"])
+            if product is None or not product.active:
+                raise ShopError(f"{line['name']} is no longer available", 409)
+            if product.is_dropship:
+                from_stock[line["product_id"]] = False  # supplier ships it; no stock to take
+                continue
+            # Atomic conditional decrement: never oversells, even under concurrency.
             result = db.execute(
                 update(Product)
                 .where(Product.id == line["product_id"], Product.stock >= line["quantity"],
@@ -97,12 +104,14 @@ def checkout(db: Session, cart_id: str, name: str, email: str, address: str,
             )
             if result.rowcount != 1:
                 raise ShopError(f"Not enough stock for {line['name']}", 409)
+            from_stock[line["product_id"]] = True
 
         order = Order(
             status=status, customer_name=name, customer_email=email, shipping_address=address,
             subtotal=view["subtotal"], shipping=view["shipping"], total=view["total"],
             items=[OrderItem(product_id=l["product_id"], name=l["name"],
-                             unit_price=l["unit_price"], quantity=l["quantity"])
+                             unit_price=l["unit_price"], quantity=l["quantity"],
+                             from_stock=from_stock[l["product_id"]])
                    for l in view["items"]],
         )
         db.add(order)

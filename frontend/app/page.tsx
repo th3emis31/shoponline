@@ -49,7 +49,7 @@ export default async function Home() {
       </section>
 
       <section className="trust" aria-label="Why shop with us">
-        <div><strong>Dispatched from the UK</strong><span>Tracked delivery</span></div>
+        <div><strong>Tracked delivery</strong><span>Delivery time shown on every product</span></div>
         <div><strong>{site.returnDays}-day returns</strong><span>Plain-English policy</span></div>
         <div><strong>Secure payment</strong><span>Card details handled by Stripe</span></div>
         <div><strong>Free delivery</strong><span>on orders over {formatGBP(site.freeShippingThreshold)}</span></div>

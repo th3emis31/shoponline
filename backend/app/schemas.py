@@ -12,6 +12,7 @@ class ProductOut(BaseModel):
     price: int
     is_bundle: bool
     in_stock: bool
+    delivery_estimate: str | None = None
 
 
 class AddItemIn(BaseModel):

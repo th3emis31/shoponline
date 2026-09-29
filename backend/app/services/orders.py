@@ -9,10 +9,12 @@ flag first, so stock can't be released or reserved twice.
 Callers commit (or roll back on error).
 """
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from ..models import Order, OrderItem, Product
+from ..models import Order, OrderItem, Product, SupplierOrder
 from .shop import ShopError
 
 
@@ -28,7 +30,9 @@ def move(db: Session, order_id: str, from_statuses: set[str] | tuple[str, ...], 
 
 
 def _items(db: Session, order_id: str) -> list[OrderItem]:
-    return list(db.scalars(select(OrderItem).where(OrderItem.order_id == order_id)))
+    """Only lines that were taken from our own stock (not dropship lines)."""
+    return list(db.scalars(select(OrderItem).where(OrderItem.order_id == order_id,
+                                                   OrderItem.from_stock.is_(True))))
 
 
 def release_stock(db: Session, order_id: str) -> bool:
@@ -66,3 +70,27 @@ def reserve_stock(db: Session, order_id: str) -> bool:
         if r.rowcount != 1:
             raise ShopError(f"Not enough stock for {item.name} to fulfil this order", 409)
     return True
+
+
+def create_supplier_orders(db: Session, order_id: str) -> int:
+    """For a paid order, list what to buy from each supplier (dropship lines).
+    Idempotent: calling it twice never creates duplicates. Returns how many were created."""
+    created = 0
+    lines = db.scalars(select(OrderItem).where(OrderItem.order_id == order_id,
+                                               OrderItem.from_stock.is_(False)))
+    for item in lines:
+        exists = db.scalar(select(SupplierOrder.id).where(SupplierOrder.order_id == order_id,
+                                                          SupplierOrder.product_id == item.product_id))
+        if exists:
+            continue
+        product = db.get(Product, item.product_id)
+        db.add(SupplierOrder(
+            order_id=order_id, product_id=item.product_id, quantity=item.quantity,
+            supplier_name=product.supplier_name if product else "",
+            supplier_url=product.supplier_url if product else "",
+            supplier_cost_total=(product.supplier_cost if product else 0) * item.quantity,
+            sale_total=item.unit_price * item.quantity,
+            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        ))
+        created += 1
+    return created

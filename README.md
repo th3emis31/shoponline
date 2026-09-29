@@ -160,6 +160,23 @@ automation.cmd report              & REM latest daily report
 - A reorder creates a **purchase order** ("ready to send"). Marking it *received* adds the stock.
 - `AUTOMATION_ENABLED=false` turns the schedule off. The Run now buttons and `automation.cmd` still work.
 
+## Dropshipping: sell without buying stock
+
+Each product can be set to **"My own stock"** or **"Dropship"** in Admin > Products. For dropship you enter:
+- the supplier's name
+- the supplier's product link
+- the supplier's price per unit, **including delivery to your customer**
+- the delivery time customers see, for example "7-12 working days"
+
+How a dropship order works:
+1. The customer pays you, through Stripe.
+2. The shop creates a **supplier order** in **Admin > Supplier orders**. It shows what to buy, the supplier link, the customer's delivery address, and your **estimated profit**: sale ex VAT, minus the supplier price, minus the Stripe fee.
+3. You buy from the supplier, using the customer's address, **with the money the customer already paid**. Mark it *Ordered* with the supplier's order number, then *Shipped* with the tracking number.
+
+Dropship products need no stock of your own. Cancelling or reversing an unpaid order never creates "phantom" stock. Margin checks and the daily report use the supplier price.
+
+**Be honest with customers.** Show the real delivery time, and remember UK consumer rules (14-day returns) still apply to you as the seller, even if the supplier ships.
+
 ## Safety guarantees
 
 These came out of an independent review and are covered by regression tests (`backend/tests/test_review_fixes.py`).

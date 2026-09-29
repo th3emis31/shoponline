@@ -65,6 +65,7 @@ def set_order_status(db: Session, order_id: str, new_status: str, note: str = ""
         if new_status == "paid":
             orders.reserve_stock(db, order.id)  # accepted after review: take the items again
             analytics.record(db, "purchase", commit=False)
+            orders.create_supplier_orders(db, order.id)
         audit(db, "order.status", order.id, actor=actor, old=old, new=new_status, note=note)
         db.commit()
     except Exception:
@@ -74,12 +75,23 @@ def set_order_status(db: Session, order_id: str, new_status: str, note: str = ""
     return order
 
 
+def economics(p: Product, price: int | None = None):
+    """Unit economics for a product. Dropship: the supplier's price (incl. delivery to
+    the customer) is the whole cost; there is no own shipping or packaging."""
+    price = p.price if price is None else price
+    if p.is_dropship:
+        return unit_economics.calculate(price, p.supplier_cost, 0, 0)
+    return unit_economics.calculate(price, p.landed_cost, p.shipping_cost, p.packaging_cost)
+
+
 def product_row(p: Product) -> dict:
-    ue = unit_economics.calculate(p.price, p.landed_cost, p.shipping_cost, p.packaging_cost)
+    ue = economics(p)
     return {
         "id": p.id, "name": p.name, "price": p.price, "stock": p.stock, "active": p.active,
         "is_bundle": p.is_bundle, "landed_cost": p.landed_cost, "shipping_cost": p.shipping_cost,
         "packaging_cost": p.packaging_cost, "contribution_pre_ads": ue.contribution_pre_ads,
+        "fulfilment": p.fulfilment, "supplier_name": p.supplier_name, "supplier_url": p.supplier_url,
+        "supplier_cost": p.supplier_cost, "delivery_estimate": p.delivery_estimate,
         "contribution_margin": ue.contribution_margin, "break_even_roas": ue.break_even_roas,
         "label": "ESTIMATE",
     }
@@ -89,7 +101,8 @@ def list_products(db: Session) -> list[dict]:
     return [product_row(p) for p in db.scalars(select(Product).order_by(Product.price))]
 
 
-EDITABLE = ("price", "stock", "active", "landed_cost", "shipping_cost", "packaging_cost")
+EDITABLE = ("price", "stock", "active", "landed_cost", "shipping_cost", "packaging_cost",
+            "fulfilment", "supplier_name", "supplier_url", "supplier_cost", "delivery_estimate")
 
 
 def update_product(db: Session, product_id: str, changes: dict, note: str = "",
