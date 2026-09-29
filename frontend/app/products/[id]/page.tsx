@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import AddToCart from "@/components/AddToCart";
 import Illustration from "@/components/Illustration";
+import Reviews from "@/components/Reviews";
 import TrackView from "@/components/TrackView";
 import WaitlistForm from "@/components/WaitlistForm";
-import { getProduct, getProducts } from "@/lib/api";
+import { getProduct, getProducts, getReviews } from "@/lib/api";
 import { BUNDLE_ID, BUNDLE_PARTS, entry } from "@/lib/catalog";
 import { jsonLdScript, productJsonLd } from "@/lib/jsonld";
 import { formatGBP } from "@/lib/money";
@@ -32,7 +33,7 @@ export default async function ProductPage({ params }: Props) {
   if (!product) notFound();
 
   const copy = entry(product.id);
-  const all = await getProducts().catch(() => []);
+  const [all, reviews] = await Promise.all([getProducts().catch(() => []), getReviews(product.id)]);
   const isPart = (id: string) => (BUNDLE_PARTS as readonly string[]).includes(id);
   // A set shows its pieces; a piece of the set shows the set and the other pieces.
   const related = product.is_bundle
@@ -46,7 +47,7 @@ export default async function ProductPage({ params }: Props) {
   return (
     <div className="product">
       <TrackView productId={product.id} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(productJsonLd(product)) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(productJsonLd(product, reviews)) }} />
       <div className="product-media"><Illustration id={product.id} /></div>
       <div>
         {product.is_bundle && <span className="badge">Best value set</span>}
@@ -105,6 +106,8 @@ export default async function ProductPage({ params }: Props) {
             <WaitlistForm productId={product.id} />
           </>
         )}
+
+        <Reviews data={reviews} />
 
         <h2>Delivery &amp; returns</h2>
         <ul>

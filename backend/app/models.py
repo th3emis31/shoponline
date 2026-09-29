@@ -315,3 +315,30 @@ class EmailMessage(Base):
     send_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Review(Base):
+    """A review from a verified buyer: only possible through the signed link in their order email.
+
+    Moderation may only reject for a fixed reason (personal data, offensive, not about the
+    product, spam). Negative reviews are never rejected for being negative (UK DMCC Act 2024).
+    """
+
+    __tablename__ = "reviews"
+    __table_args__ = (
+        UniqueConstraint("order_id", "product_id", name="one_review_per_order_product"),
+        CheckConstraint("rating BETWEEN 1 AND 5", name="rating_1_to_5"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), index=True)
+    rating: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(120), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    display_name: Mapped[str] = mapped_column(String(60))  # e.g. "Jane D."
+    # pending | published | rejected
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)
+    reject_reason: Mapped[str] = mapped_column(String(40), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

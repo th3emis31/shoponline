@@ -20,7 +20,7 @@ This tracks every section of the NOVAHAUS Business Blueprint against what the co
 | H | Shop "filter by room" | ⬜ | |
 | H | Contact **form** (not only email) | ⬜ | |
 | H | Buying guides / blog | ⬜ | |
-| H | Social proof only once real reviews exist | ⬜ | Verified-purchase reviews still to build |
+| H | Social proof only once real reviews exist | ✅ | Verified-buyer reviews through a signed link (order email and order page). You check them in Admin > Reviews, and negative reviews can't be hidden. The product page and Google rating appear only after the first published review |
 | I | Waitlist smoke test | ✅ | "Notify me" with explicit consent, and sign-ups per product in admin |
 | I | Email flows: welcome 5, abandoned cart 4, post-purchase 5, win-back 1 | ✅ | `services/emails.py`, plus order confirmation, shipped and the launch email. You read them in Admin > Emails; they're sent once SMTP is set (DEPLOY.md step 6b) |
 | I | Consent rules (opt-in, no pre-ticked boxes) | ✅ | Unticked boxes; the waitlist only gets the launch email; consent is re-checked before every send; one-click unsubscribe |

@@ -12,6 +12,8 @@ export STRIPE_SECRET_KEY="" STRIPE_WEBHOOK_SECRET=""
 export ADMIN_TOKEN="e2e-admin-token"
 # Scheduled jobs off in tests; the tests trigger jobs with "Run now".
 export AUTOMATION_ENABLED=false
+# Many sign-ins from one address during the run; production ignores this.
+export RATE_LIMIT_MULTIPLIER=10
 PY="${PYTHON:-python3}"
 "$PY" -m alembic upgrade head
 "$PY" -m app.seed

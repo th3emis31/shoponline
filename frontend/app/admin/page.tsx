@@ -4,14 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { ApprovalsTab, AutomationTab, PurchaseOrdersTab } from "@/components/admin/AutomationTabs";
 import { ProductForm, SupplierOrdersTab } from "@/components/admin/DropshipTabs";
 import EmailsTab from "@/components/admin/EmailsTab";
+import ReviewsTab from "@/components/admin/ReviewsTab";
 import TeamTab from "@/components/admin/TeamTab";
 import { formatGBP } from "@/lib/money";
 
 const TOKEN_KEY = "novahaus.adminToken";
-type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team" | "emails";
+type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team" | "emails" | "reviews";
 const TAB_LABEL: Record<Tab, string> = {
   orders: "Orders", "supplier-orders": "Supplier orders", approvals: "Approvals", automation: "Automation",
-  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team", emails: "Emails",
+  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team", emails: "Emails", reviews: "Reviews",
 };
 
 type AdminOrder = {
@@ -112,8 +113,8 @@ export default function AdminPage() {
   }
 
   const tabs: Tab[] = me?.role === "owner"
-    ? ["orders", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "emails", "funnel", "audit", "team"]
-    : ["orders"];
+    ? ["orders", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "reviews", "emails", "funnel", "audit", "team"]
+    : ["orders", "reviews"];
 
   async function changeStatus(id: string, status: string) {
     const note = window.prompt(`Change order to "${status}". Optional note (e.g. tracking number):`, "");
@@ -236,6 +237,7 @@ export default function AdminPage() {
       {tab === "supplier-orders" && <SupplierOrdersTab call={call} onError={setError} />}
       {tab === "team" && <TeamTab call={call} onError={setError} me={me.actor} />}
       {tab === "emails" && <EmailsTab call={call} onError={setError} />}
+      {tab === "reviews" && <ReviewsTab call={call} onError={setError} />}
 
       {tab === "funnel" && funnel && (
         <>

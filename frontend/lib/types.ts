@@ -24,7 +24,11 @@ export type Cart = {
 };
 
 export type Order = Cart & {
-  status: "placed" | "pending_payment" | "paid" | "cancelled" | "payment_review";
+  status: "placed" | "pending_payment" | "paid" | "shipped" | "cancelled" | "payment_review";
   created_at: string;
   checkout_url?: string | null;
+  review_path?: string | null;
 };
+
+export type Review = { id: number; rating: number; title: string; body: string; name: string; date: string; verified: boolean };
+export type ReviewSummary = { count: number; average: number | null; reviews: Review[] };

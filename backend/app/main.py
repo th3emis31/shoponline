@@ -15,7 +15,7 @@ from .models import Order, Product, WaitlistSignup
 from .security import require_owner
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
 from .ratelimit import limit
-from .services import analytics, emails, payments, shop, unit_economics
+from .services import analytics, emails, payments, reviews, shop, unit_economics
 from .services import orders as orders_svc
 from .services.shop import ShopError
 
@@ -199,6 +199,33 @@ def email_unsubscribe(body: UnsubscribeIn, db: Session = Depends(get_session)):
     return {"ok": True, "message": "You're unsubscribed. We won't send you marketing emails again."}
 
 
+# ---------------------------------------------------------------- reviews (verified buyers only)
+
+@app.get("/api/products/{product_id}/reviews")
+def product_reviews(product_id: str, db: Session = Depends(get_session)):
+    return reviews.summary(db, product_id)
+
+
+@app.get("/api/reviews/{order_id}", dependencies=[Depends(limit("review", 30, 600))])
+def review_form(order_id: str, token: str = "", db: Session = Depends(get_session)):
+    return reviews.form(db, order_id, token[:100])
+
+
+class ReviewIn(BaseModel):
+    token: str = Field(min_length=10, max_length=100)
+    product_id: str = Field(min_length=1, max_length=64)
+    rating: int = Field(ge=1, le=5)
+    title: str = Field(default="", max_length=120)
+    body: str = Field(default="", max_length=2000)
+
+
+@app.post("/api/reviews/{order_id}", status_code=201, dependencies=[Depends(limit("review", 30, 600))])
+def review_submit(order_id: str, body: ReviewIn, db: Session = Depends(get_session)):
+    reviews.submit(db, order_id, body.token, body.product_id, body.rating, body.title, body.body)
+    db.commit()
+    return {"ok": True, "message": "Thank you! Your review will appear once we've checked it (usually within a day)."}
+
+
 @app.post("/api/webhooks/stripe")
 async def stripe_webhook(request: Request, db: Session = Depends(get_session)):
     event = payments.verify_event(await request.body(), request.headers.get("stripe-signature"))
@@ -210,7 +237,10 @@ def _lookup(db: Session, order_id: str, email: str) -> dict:
     order = db.get(Order, order_id)
     if order is None or order.customer_email.lower() != email.strip().lower():
         raise ShopError("Order not found", 404)
-    return shop.order_view(order)
+    view = shop.order_view(order)
+    if order.status in reviews.REVIEWABLE:
+        view["review_path"] = f"/review/{order.id}?token={emails.sign('review:' + order.id)}"
+    return view
 
 
 class LookupIn(BaseModel):

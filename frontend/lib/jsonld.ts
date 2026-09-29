@@ -1,11 +1,12 @@
-import type { Product } from "./types";
+import type { Product, ReviewSummary } from "./types";
 import { site } from "./site";
 
 /**
- * schema.org Product data for search engines. Deliberately contains no
- * ratings or reviews: the blueprint forbids showing any we haven't earned.
+ * schema.org Product data for search engines. Ratings appear only once real,
+ * published verified-buyer reviews exist: the blueprint forbids any we haven't earned.
  */
-export function productJsonLd(p: Product) {
+export function productJsonLd(p: Product, reviews?: ReviewSummary | null) {
+  const rated = reviews && reviews.count > 0 && reviews.average != null;
   return {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -20,6 +21,20 @@ export function productJsonLd(p: Product) {
       availability: p.in_stock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
       url: `${site.url}/products/${p.id}`,
     },
+    ...(rated
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating", ratingValue: reviews.average, reviewCount: reviews.count, bestRating: 5, worstRating: 1,
+          },
+          review: reviews.reviews.slice(0, 5).map((r) => ({
+            "@type": "Review",
+            author: { "@type": "Person", name: r.name },
+            reviewRating: { "@type": "Rating", ratingValue: r.rating, bestRating: 5, worstRating: 1 },
+            ...(r.title ? { name: r.title } : {}),
+            ...(r.body ? { reviewBody: r.body } : {}),
+          })),
+        }
+      : {}),
   };
 }
 

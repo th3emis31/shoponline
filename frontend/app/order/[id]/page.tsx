@@ -11,6 +11,7 @@ const STATUS_TEXT: Record<Order["status"], string> = {
   placed: "Order placed",
   pending_payment: "Waiting for payment confirmation",
   paid: "Paid — we're preparing your order",
+  shipped: "On its way — check your email for tracking",
   cancelled: "Cancelled — no payment was taken",
   payment_review: "Payment under review — we'll email you",
 };
@@ -81,6 +82,9 @@ export default function OrderPage() {
         <div><span>UK delivery</span><span>{order.shipping === 0 ? "Free" : formatGBP(order.shipping)}</span></div>
         <div className="grand"><span>Total</span><span>{formatGBP(order.total)}</span></div>
       </div>
+      {order.review_path && (
+        <p><Link href={order.review_path} data-testid="write-review">Write a review</Link> <span className="muted">(verified buyers only)</span></p>
+      )}
       <p><Link href="/shop">Continue shopping</Link></p>
     </>
   );

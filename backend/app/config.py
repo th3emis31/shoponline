@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # Stripe, and the API docs pages are hidden.
     environment: str = "development"
 
+    # Test runs only (ignored in production): multiplies every rate limit.
+    rate_limit_multiplier: int = 1
+
     @property
     def is_production(self) -> bool:
         return self.environment.lower() == "production"

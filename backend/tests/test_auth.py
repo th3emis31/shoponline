@@ -226,3 +226,13 @@ def test_last_owner_cannot_be_disabled_by_another_owner(client, db):
     t2 = hdr(login(client, *OWNER).json()["token"])
     # OWNER is now the last active owner and can't be disabled (by anyone, including themselves)
     assert client.post(f"/api/admin/users/{OWNER[0]}/active", headers=t2, json={"active": False}).status_code == 400
+
+
+def test_rate_limit_multiplier_is_ignored_in_production(monkeypatch):
+    from app import ratelimit
+    from app.config import settings
+    monkeypatch.setattr(settings, "rate_limit_multiplier", 10)
+    monkeypatch.setattr(settings, "environment", "development")
+    assert ratelimit._scale() == 10
+    monkeypatch.setattr(settings, "environment", "production")
+    assert ratelimit._scale() == 1

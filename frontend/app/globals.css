@@ -154,3 +154,12 @@ footer.site .footer-signup { grid-column: 1 / -1; max-width: 560px; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Reviews */
+.stars { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.stars legend { font-weight: 600; margin-bottom: 4px; }
+.stars label { display: inline-flex; gap: 6px; align-items: center; }
+.stars-shown { color: var(--oak); letter-spacing: 1px; }
+.review-list { list-style: none; padding: 0; margin: 0; }
+.review-list li { border-top: 1px solid var(--line); padding: 12px 0; }
+.review-list li p { margin: 6px 0 0; }

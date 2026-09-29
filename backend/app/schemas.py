@@ -61,6 +61,8 @@ class OrderOut(BaseModel):
     total: int
     created_at: datetime
     checkout_url: str | None = None
+    # Only returned to the buyer (order number + email), once the order is paid.
+    review_path: str | None = None
 
 
 class EconomicsOut(BaseModel):

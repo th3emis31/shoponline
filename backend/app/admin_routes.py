@@ -396,3 +396,36 @@ def send_launch(db: Session = Depends(get_session), principal: Principal = Depen
     admin.audit(db, "email.launch", "waitlist", actor=principal.actor, queued=n)
     db.commit()
     return {"queued": n}
+
+
+# ---------------------------------------------------------------- reviews (owner and staff)
+
+@router.get("/reviews")
+def list_reviews(status: str | None = None, db: Session = Depends(get_session)):
+    from .services import reviews
+    from .models import Product
+    names = dict(db.execute(select(Product.id, Product.name)).all())
+    return {
+        "reasons": reviews.REJECT_REASONS,
+        "reviews": [{"id": r.id, "order_id": r.order_id, "product_id": r.product_id,
+                     "product": names.get(r.product_id, r.product_id), "rating": r.rating, "title": r.title,
+                     "body": r.body, "name": r.display_name, "status": r.status,
+                     "reject_reason": r.reject_reason, "created_at": r.created_at}
+                    for r in reviews.admin_list(db, status)],
+    }
+
+
+class ModerateIn(BaseModel):
+    action: Literal["publish", "reject"]
+    reason: str = Field(default="", max_length=40)
+
+
+@router.post("/reviews/{review_id}")
+def moderate_review(review_id: int, body: ModerateIn, db: Session = Depends(get_session),
+                    principal: Principal = Depends(require_admin)):
+    from .services import reviews
+    r = reviews.moderate(db, review_id, body.action, body.reason)
+    admin.audit(db, f"review.{body.action}", str(review_id), actor=principal.actor,
+                rating=r.rating, reason=body.reason)
+    db.commit()
+    return {"id": r.id, "status": r.status}
