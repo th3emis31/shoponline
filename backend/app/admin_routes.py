@@ -429,3 +429,38 @@ def moderate_review(review_id: int, body: ModerateIn, db: Session = Depends(get_
                 rating=r.rating, reason=body.reason)
     db.commit()
     return {"id": r.id, "status": r.status}
+
+
+# ---------------------------------------------------------------- campaigns (owner only)
+
+@router.get("/campaigns", dependencies=[Depends(require_owner)])
+def campaign_report(days: int = Query(30, ge=1, le=365), db: Session = Depends(get_session)):
+    from .services import campaigns
+    return {**campaigns.report(db, days),
+            "spend_rows": [{"id": r.id, "campaign": r.campaign, "day": r.day, "spend": r.spend, "clicks": r.clicks,
+                            "impressions": r.impressions, "note": r.note, "created_by": r.created_by}
+                           for r in campaigns.spend_rows(db)]}
+
+
+class SpendIn(BaseModel):
+    campaign: str = Field(min_length=3, max_length=130)
+    day: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    spend: int = Field(ge=0, le=10_000_00)
+    clicks: int = Field(default=0, ge=0, le=10_000_000)
+    impressions: int = Field(default=0, ge=0, le=1_000_000_000)
+    note: str = Field(default="", max_length=200)
+
+
+@router.post("/campaigns/spend", status_code=201)
+def add_spend(body: SpendIn, db: Session = Depends(get_session), principal: Principal = Depends(require_owner)):
+    from datetime import datetime, timezone
+    from .services import campaigns
+    try:
+        day = datetime.strptime(body.day, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        row = campaigns.add_spend(db, body.campaign, day, body.spend, body.clicks, body.impressions,
+                                  body.note, principal.actor)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    admin.audit(db, "campaign.spend", row.campaign, actor=principal.actor, day=body.day, spend=body.spend)
+    db.commit()
+    return {"id": row.id, "campaign": row.campaign}

@@ -42,6 +42,8 @@ class CheckoutIn(BaseModel):
     address: str = Field(min_length=1, max_length=500)
     # Explicit opt-in for tips and offers; the checkbox is never pre-ticked.
     marketing_consent: bool = False
+    # Ad campaign tag from the ad link ("source:campaign"); used for per-campaign results only.
+    campaign: str | None = Field(default=None, max_length=130)
 
     @field_validator("name", "address")
     @classmethod

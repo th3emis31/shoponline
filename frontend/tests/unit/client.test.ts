@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addToCart, checkout, ensureCart, recalledOrderEmail } from "@/lib/client";
+import { addToCart, campaignTag, captureCampaign, checkout, ensureCart, recalledOrderEmail } from "@/lib/client";
 
 function memoryStorage(): Storage {
   const m = new Map<string, string>();
@@ -82,5 +82,25 @@ describe("track", () => {
     await new Promise((r) => setTimeout(r, 0));
     const body = JSON.parse((failing.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
     expect(body).toEqual({ type: "view_product", product_id: "desk-mat" });
+  });
+});
+
+describe("campaign tracking", () => {
+  it("normalises ad tags like the backend", () => {
+    expect(campaignTag("Facebook", "Desk Reset Oct")).toBe("facebook:desk-reset-oct");
+    expect(campaignTag("tiktok", null)).toBe("tiktok:none");
+    expect(campaignTag(null, "x")).toBeNull();
+  });
+  it("remembers the campaign for this tab and sends it with checkout", async () => {
+    captureCampaign("?utm_source=Facebook&utm_campaign=Desk%20Reset");
+    expect(window.sessionStorage.getItem("novahaus.campaign")).toBe("facebook:desk-reset");
+    fetchMock.mockReturnValueOnce(respond(201, { id: "o1", status: "placed", items: [], subtotal: 0, shipping: 0, total: 0, created_at: "" }));
+    await checkout("c1", { name: "A", email: "a@example.com", address: "x" });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.campaign).toBe("facebook:desk-reset");
+  });
+  it("does nothing without an ad tag", () => {
+    captureCampaign("?q=desk");
+    expect(window.sessionStorage.getItem("novahaus.campaign")).toBeNull();
   });
 });

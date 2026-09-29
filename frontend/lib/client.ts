@@ -4,6 +4,7 @@ import type { Cart, Order } from "./types";
 
 const CART_KEY = "novahaus.cartId";
 const EMAIL_KEY = "novahaus.orderEmail";
+const CAMPAIGN_KEY = "novahaus.campaign";
 export const CART_EVENT = "novahaus:cart";
 
 /** Tell other components (e.g. the header cart count) that the cart changed. */
@@ -94,7 +95,7 @@ export async function checkout(
   track("begin_checkout");
   const order = await api<Order>(`/api/carts/${cartId}/checkout`, {
     method: "POST",
-    body: JSON.stringify(details),
+    body: JSON.stringify({ ...details, campaign: currentCampaign() }),
   });
   storage()?.removeItem(CART_KEY);
   rememberOrderEmail(details.email);
@@ -140,5 +141,43 @@ export function track(type: "view_product" | "add_to_cart" | "begin_checkout", p
     }).catch(() => {});
   } catch {
     /* analytics must never affect shopping */
+  }
+}
+
+/** "Facebook", "Desk Reset" -> "facebook:desk-reset" (same rule as the backend). */
+export function campaignTag(source: string | null, campaign: string | null): string | null {
+  const clean = (v: string | null) => (v ?? "").trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  const src = clean(source);
+  if (!src) return null;
+  return `${src}:${clean(campaign) || "none"}`;
+}
+
+function currentCampaign(): string | null {
+  try {
+    return window.sessionStorage.getItem(CAMPAIGN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * When a visitor arrives through an ad link (?utm_source=...&utm_campaign=...), remember
+ * only the campaign tag for this browser tab, so an order can be credited to the ad.
+ * No visitor ID, nothing personal; it disappears when the tab is closed.
+ */
+export function captureCampaign(search: string) {
+  try {
+    const q = new URLSearchParams(search);
+    const tag = campaignTag(q.get("utm_source"), q.get("utm_campaign"));
+    if (!tag) return;
+    window.sessionStorage.setItem(CAMPAIGN_KEY, tag);
+    void fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "visit", campaign: tag }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* never affects shopping */
   }
 }

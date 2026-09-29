@@ -24,7 +24,7 @@ This tracks every section of the NOVAHAUS Business Blueprint against what the co
 | I | Waitlist smoke test | ✅ | "Notify me" with explicit consent, and sign-ups per product in admin |
 | I | Email flows: welcome 5, abandoned cart 4, post-purchase 5, win-back 1 | ✅ | `services/emails.py`, plus order confirmation, shipped and the launch email. You read them in Admin > Emails; they're sent once SMTP is set (DEPLOY.md step 6b) |
 | I | Consent rules (opt-in, no pre-ticked boxes) | ✅ | Unticked boxes; the waitlist only gets the launch email; consent is re-checked before every send; one-click unsubscribe |
-| I | Per-campaign tracking: CTR, CPC, CAC, ROAS, **contribution after ads** | ⬜ | |
+| I | Per-campaign tracking: CTR, CPC, CAC, ROAS, **contribution after ads** | ✅ | Admin > Campaigns. Ad links carry `utm_source` / `utm_campaign`; you type in the ad cost; each campaign gets a plain-English verdict. No visitor tracking; only the campaign name is kept, for that tab |
 | I | Google Shopping product feed | ⬜ | |
 | J | Approval gate + audit log | ✅ | Admin > Approvals, and the audit log with who did what |
 | J | Automation within limits | ✅ | Reorders, the margin guard, abandoned checkouts, backups, the daily report |

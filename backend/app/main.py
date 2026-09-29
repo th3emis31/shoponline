@@ -15,7 +15,7 @@ from .models import Order, Product, WaitlistSignup
 from .security import require_owner
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
 from .ratelimit import limit
-from .services import analytics, emails, payments, reviews, shop, unit_economics
+from .services import analytics, campaigns, emails, payments, reviews, shop, unit_economics
 from .services import orders as orders_svc
 from .services.shop import ShopError
 
@@ -95,6 +95,7 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
             raise ShopError("Checkout is temporarily unavailable. Please try again later.", 503)
         # Development mode: no payment provider configured, order is just placed.
         order = shop.checkout(db, cart_id, body.name, str(body.email), body.address)
+        order.campaign = campaigns.parse_tag(body.campaign)
         orders_svc.create_supplier_orders(db, order.id)
         emails.on_order_paid(db, order)
         analytics.record(db, "purchase")  # commits
@@ -104,6 +105,7 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
     # The cart is kept until Stripe accepts the session, so an outage never loses it.
     order = shop.checkout(db, cart_id, body.name, str(body.email), body.address,
                           status="pending_payment", delete_cart=False)
+    order.campaign = campaigns.parse_tag(body.campaign)
     try:
         session_id, url = payments.create_checkout_session(order)
     except Exception as exc:
@@ -122,14 +124,20 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
 
 
 class EventIn(BaseModel):
-    type: Literal["view_product", "add_to_cart", "begin_checkout"]
+    type: Literal["view_product", "add_to_cart", "begin_checkout", "visit"]
     product_id: str | None = Field(default=None, max_length=64)
+    campaign: str | None = Field(default=None, max_length=130)
 
 
 @app.post("/api/events", status_code=204, dependencies=[Depends(limit("events", 300, 600))])
 def track_event(body: EventIn, db: Session = Depends(get_session)):
     # Unknown product IDs are dropped so the table can't be filled with junk.
     product_id = body.product_id if body.product_id and db.get(Product, body.product_id) else None
+    if body.type == "visit":
+        tag = campaigns.parse_tag(body.campaign)
+        if tag:  # a visit without a valid ad tag says nothing: drop it
+            analytics.record(db, "visit", product_id, campaign=tag)
+        return
     analytics.record(db, body.type, product_id)
 
 

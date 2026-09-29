@@ -14,12 +14,15 @@ from ..models import AnalyticsEvent
 
 CLIENT_EVENTS = ("view_product", "add_to_cart", "begin_checkout")
 FUNNEL = (*CLIENT_EVENTS, "purchase")
+# "visit" = arrived through an ad link; stores only the campaign tag, for per-campaign results.
+OTHER_EVENTS = ("visit",)
 
 
-def record(db: Session, event_type: str, product_id: str | None = None, commit: bool = True) -> None:
-    if event_type not in FUNNEL:
+def record(db: Session, event_type: str, product_id: str | None = None, commit: bool = True,
+           campaign: str | None = None) -> None:
+    if event_type not in FUNNEL and event_type not in OTHER_EVENTS:
         raise ValueError(f"Unknown event type: {event_type}")
-    db.add(AnalyticsEvent(type=event_type, product_id=product_id))
+    db.add(AnalyticsEvent(type=event_type, product_id=product_id, campaign=campaign))
     if commit:
         db.commit()
 

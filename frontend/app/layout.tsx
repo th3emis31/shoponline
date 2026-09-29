@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import CampaignCapture from "@/components/CampaignCapture";
 import CartBadge from "@/components/CartBadge";
 import NewsletterForm from "@/components/NewsletterForm";
 import { formatGBP } from "@/lib/money";
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-GB">
       <body>
+        <CampaignCapture />
         {!site.launchReady && (
           <div className="draft-banner" role="note">
             Preview site — not yet taking real orders.

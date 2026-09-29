@@ -88,6 +88,8 @@ class Order(Base):
     # conditional UPDATE so stock can never be released (or reserved) twice.
     stock_reserved: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Ad campaign that brought the buyer ("source:campaign" from the ad link's UTM tags), if any.
+    campaign: Mapped[str | None] = mapped_column(String(130), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
@@ -127,6 +129,8 @@ class AnalyticsEvent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     type: Mapped[str] = mapped_column(String(32), index=True)
     product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Only for "visit": which ad campaign the visit came from (never who).
+    campaign: Mapped[str | None] = mapped_column(String(130), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
 
@@ -342,3 +346,20 @@ class Review(Base):
     reject_reason: Mapped[str] = mapped_column(String(40), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AdSpend(Base):
+    """What an ad campaign cost for a period, typed in from the ad platform (Blueprint section I)."""
+
+    __tablename__ = "ad_spend"
+    __table_args__ = (CheckConstraint("spend >= 0 AND clicks >= 0 AND impressions >= 0", name="ad_spend_non_negative"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign: Mapped[str] = mapped_column(String(130), index=True)  # "source:campaign", same as the ad link
+    day: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)  # start of the period
+    spend: Mapped[int] = mapped_column(Integer)  # pence, as charged by the platform
+    clicks: Mapped[int] = mapped_column(Integer, default=0)
+    impressions: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str] = mapped_column(String(200), default="")
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
