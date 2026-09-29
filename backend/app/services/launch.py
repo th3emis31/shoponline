@@ -114,9 +114,11 @@ def checklist(db: Session) -> dict:
             checks.append(_check(score >= 90, f"Mobile Lighthouse performance: {score if score >= 0 else 'not measured'} (needs ≥ 90)"))
         auto_ok = all(c["ok"] for c in checks)
         confirmed = bool(s and s.confirmed)
-        passed = auto_ok and (confirmed or not needs_owner)
+        # Older confirmations saved without evidence don't count until evidence is added.
+        evidenced = confirmed and len((s.note or "").strip()) >= 5
+        passed = auto_ok and (evidenced or not needs_owner)
         rows.append({"id": gid, "name": name, "condition": condition, "label": label, "needs_owner": needs_owner,
-                     "checks": checks, "confirmed": confirmed, "value": s.value if s else "", "note": s.note if s else "",
+                     "checks": checks, "confirmed": confirmed, "evidenced": evidenced, "value": s.value if s else "", "note": s.note if s else "",
                      "confirmed_by": s.confirmed_by if s else None, "updated_at": s.updated_at if s else None,
                      "passed": passed})
     green = sum(1 for r in rows if r["passed"])
@@ -125,7 +127,10 @@ def checklist(db: Session) -> dict:
 
 def sign(db: Session, gate: str, confirmed: bool, value: str, note: str, actor: str | None) -> LaunchGate:
     if gate not in GATE_IDS:
-        raise ValueError("Unknown gate")
+        raise LookupError("Unknown gate")
+    # A confirmation is a claim: it must say what the evidence is.
+    if confirmed and len(note.strip()) < 5:
+        raise ValueError("Write the evidence first (for example: written quote from Supplier A, 12 Oct).")
     row = db.get(LaunchGate, gate)
     if row is None:
         row = LaunchGate(gate=gate)

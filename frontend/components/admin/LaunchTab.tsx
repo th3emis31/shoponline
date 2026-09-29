@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 type Call = <T>(path: string, init?: RequestInit) => Promise<T>;
 type Gate = {
   id: string; name: string; condition: string; label: string; needs_owner: boolean; checks: { ok: boolean; text: string }[];
-  confirmed: boolean; value: string; note: string; confirmed_by: string | null; passed: boolean;
+  confirmed: boolean; evidenced: boolean; value: string; note: string; confirmed_by: string | null; passed: boolean;
 };
 type Data = { green: number; total: number; ready: boolean; gates: Gate[] };
 
@@ -32,8 +32,12 @@ function GateRow({ g, save }: { g: Gate; save: (id: string, confirmed: boolean, 
           <p>
             {g.confirmed
               ? <button className="btn link" onClick={() => save(g.id, false, value, note)}>Undo my confirmation</button>
-              : <button className="btn secondary" onClick={() => save(g.id, true, value, note)}>I confirm this is done</button>}
-            {g.confirmed_by && <span className="small muted"> Confirmed by {g.confirmed_by}</span>}
+              : <button className="btn secondary" disabled={note.trim().length < 5} onClick={() => save(g.id, true, value, note)}>I confirm this is done</button>}
+            {!g.confirmed && note.trim().length < 5 && <span className="small muted"> Write the evidence first.</span>}
+            {g.confirmed && g.confirmed_by && <span className="small muted"> Confirmed by {g.confirmed_by}</span>}
+            {g.confirmed && !g.evidenced && (
+              <><br /><span className="small error">No evidence written, so this doesn&apos;t count yet. Undo, write the evidence, then confirm again.</span></>
+            )}
           </p>
         </div>
       )}

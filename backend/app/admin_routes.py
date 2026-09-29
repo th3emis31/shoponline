@@ -605,8 +605,10 @@ def sign_gate(gate: str, body: GateIn, db: Session = Depends(get_session), princ
     from .services import launch
     try:
         launch.sign(db, gate, body.confirmed, body.value, body.note, principal.actor)
-    except ValueError as exc:
+    except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     admin.audit(db, "launch.confirm" if body.confirmed else "launch.unconfirm", gate, actor=principal.actor,
                 value=body.value)
     db.commit()

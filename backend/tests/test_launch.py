@@ -42,15 +42,15 @@ def test_unit_economics_gate_uses_real_costs(client, db):
         p = s.get(Product, "desk-reset")
         p.fulfilment, p.supplier_cost, p.supplier_name = "dropship", 1500, "Acme"
         s.commit()
-    client.post("/api/admin/launch/unit_economics", headers=h, json={"confirmed": True})
+    client.post("/api/admin/launch/unit_economics", headers=h, json={"confirmed": True, "note": "Quote from Acme, 12 Oct"})
     assert gate(client.get("/api/admin/launch", headers=h).json(), "unit_economics")["passed"] is True
 
 
 def test_website_gate_needs_lighthouse_90(client, db):
     h = login(client, db)
-    g = gate(client.post("/api/admin/launch/website", headers=h, json={"confirmed": True, "value": "84"}).json(), "website")
+    g = gate(client.post("/api/admin/launch/website", headers=h, json={"confirmed": True, "value": "84", "note": "pagespeed.web.dev"}).json(), "website")
     assert g["passed"] is False and any("84" in c["text"] for c in g["checks"])
-    g = gate(client.post("/api/admin/launch/website", headers=h, json={"confirmed": True, "value": "93"}).json(), "website")
+    g = gate(client.post("/api/admin/launch/website", headers=h, json={"confirmed": True, "value": "93", "note": "pagespeed.web.dev"}).json(), "website")
     assert g["passed"] is True
 
 
@@ -81,3 +81,22 @@ def test_legal_gate_reads_business_details(client, db, monkeypatch):
     monkeypatch.setattr(settings, "shop_legal_name", "Novahaus Ltd")
     client.post("/api/admin/launch/legal_pages", headers=h, json={"confirmed": True, "note": "Solicitor reviewed"})
     assert gate(client.get("/api/admin/launch", headers=h).json(), "legal_pages")["passed"] is True
+
+
+def test_confirmation_needs_written_evidence(client, db):
+    h = login(client, db)
+    r = client.post("/api/admin/launch/shipping", headers=h, json={"confirmed": True, "note": ""})
+    assert r.status_code == 400 and "evidence" in r.json()["detail"]
+    # undoing never needs a note
+    assert client.post("/api/admin/launch/shipping", headers=h, json={"confirmed": False}).status_code == 200
+
+
+def test_old_confirmation_without_evidence_does_not_count(client, db):
+    from app.models import LaunchGate
+    h = login(client, db)
+    with db() as s:
+        s.add(LaunchGate(gate="support", confirmed=True, note=""))  # support needs no owner: unaffected
+        s.add(LaunchGate(gate="returns", confirmed=True, note=""))
+        s.commit()
+    g = gate(client.get("/api/admin/launch", headers=h).json(), "returns")
+    assert g["confirmed"] is True and g["evidenced"] is False and g["passed"] is False
