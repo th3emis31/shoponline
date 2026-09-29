@@ -24,8 +24,8 @@ TRANSITIONS: dict[str, set[str]] = {
 STOCK_HOLDING = {"placed", "pending_payment", "payment_review"}
 
 
-def audit(db: Session, action: str, target: str, **detail) -> None:
-    db.add(AdminAudit(action=action, target=target, detail=json.dumps(detail, default=str)))
+def audit(db: Session, action: str, target: str, actor: str | None = None, **detail) -> None:
+    db.add(AdminAudit(action=action, target=target, actor=actor, detail=json.dumps(detail, default=str)))
 
 
 def list_orders(db: Session, status: str | None = None, limit: int = 100) -> list[Order]:
@@ -35,7 +35,8 @@ def list_orders(db: Session, status: str | None = None, limit: int = 100) -> lis
     return list(db.scalars(q))
 
 
-def set_order_status(db: Session, order_id: str, new_status: str, note: str = "") -> Order:
+def set_order_status(db: Session, order_id: str, new_status: str, note: str = "",
+                     actor: str | None = None) -> Order:
     order = db.get(Order, order_id)
     if order is None:
         raise ShopError("Order not found", 404)
@@ -50,7 +51,7 @@ def set_order_status(db: Session, order_id: str, new_status: str, note: str = ""
             order.paid_at = datetime.now(timezone.utc)
             analytics.record(db, "purchase", commit=False)
         order.status = new_status
-        audit(db, "order.status", order.id, old=old, new=new_status, note=note)
+        audit(db, "order.status", order.id, actor=actor, old=old, new=new_status, note=note)
         db.commit()
     except Exception:
         db.rollback()
@@ -76,7 +77,8 @@ def list_products(db: Session) -> list[dict]:
 EDITABLE = ("price", "stock", "active", "landed_cost", "shipping_cost", "packaging_cost")
 
 
-def update_product(db: Session, product_id: str, changes: dict, note: str = "") -> dict:
+def update_product(db: Session, product_id: str, changes: dict, note: str = "",
+                   actor: str | None = None) -> dict:
     p = db.get(Product, product_id)
     if p is None:
         raise ShopError("Product not found", 404)
@@ -86,7 +88,7 @@ def update_product(db: Session, product_id: str, changes: dict, note: str = "") 
     before = {k: getattr(p, k) for k in changes}
     for k, v in changes.items():
         setattr(p, k, v)
-    audit(db, "product.update", p.id, before=before, after=changes, note=note)
+    audit(db, "product.update", p.id, actor=actor, before=before, after=changes, note=note)
     db.commit()
     return product_row(p)
 

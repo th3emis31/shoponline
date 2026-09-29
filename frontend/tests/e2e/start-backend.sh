@@ -13,4 +13,6 @@ export ADMIN_TOKEN="e2e-admin-token"
 PY="${PYTHON:-python3}"
 "$PY" -m alembic upgrade head
 "$PY" -m app.seed
+ADMIN_PASSWORD="e2e owner password" "$PY" -m app.admin_users create owner@e2e.test --role owner
+ADMIN_PASSWORD="e2e staff password" "$PY" -m app.admin_users create staff@e2e.test --role staff
 exec "$PY" -m uvicorn app.main:app --port "${BACKEND_PORT:-8100}"

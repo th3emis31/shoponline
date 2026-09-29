@@ -117,5 +117,35 @@ class AdminAudit(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     action: Mapped[str] = mapped_column(String(64))
     target: Mapped[str] = mapped_column(String(100))
+    # Who did it: an admin's email, or "admin-token" for the shared break-glass token.
+    actor: Mapped[str | None] = mapped_column(String(320), nullable=True)
     detail: Mapped[str] = mapped_column(Text)  # JSON
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class AdminUser(Base):
+    """A person who can sign in to /admin. Roles: owner (everything) or staff (orders only)."""
+
+    __tablename__ = "admin_users"
+    __table_args__ = (CheckConstraint("role IN ('owner', 'staff')", name="admin_role_valid"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(10))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AdminSession(Base):
+    """Signed-in admin session. Only a SHA-256 hash of the token is stored."""
+
+    __tablename__ = "admin_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("admin_users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    user: Mapped[AdminUser] = relationship()

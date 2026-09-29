@@ -84,6 +84,8 @@ Push-Location $Backend
 try {
   Run $VenvPy @("-m", "alembic", "upgrade", "head")
   Run $VenvPy @("-m", "app.seed")
+  $admins = & $VenvPy -m app.admin_users list
+  $NeedsAdmin = ($admins -join " ") -match "No admin accounts"
 } finally { Pop-Location }
 
 # ---------- 3. Storefront ----------
@@ -122,7 +124,13 @@ if (-not (Wait-Url "http://localhost:3000/shop" 120)) { Fail "Shop did not start
 Write-Host ""
 Write-Host "NOVAHAUS is running:" -ForegroundColor Green
 Write-Host "  Shop:      http://localhost:3000"
-Write-Host "  Admin:     http://localhost:3000/admin   (token: $adminToken)"
+Write-Host "  Admin:     http://localhost:3000/admin"
+if ($NeedsAdmin) {
+  Write-Host ""
+  Write-Host "  Create your personal owner login (recommended), in this folder:" -ForegroundColor Yellow
+  Write-Host "    admin-user.cmd create you@example.com --role owner"
+  Write-Host "  Until then you can sign in with the shared token: $adminToken"
+}
 Write-Host "  API docs:  http://localhost:8000/docs"
 Write-Host ""
 Write-Host "To stop: close the two server windows."

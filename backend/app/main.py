@@ -7,14 +7,16 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import get_session
+from .admin_routes import public as admin_public_router
 from .admin_routes import router as admin_router
 from .models import Order, Product
-from .security import require_admin
+from .security import require_owner
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
 from .services import analytics, payments, shop, unit_economics
 from .services.shop import ShopError
 
 app = FastAPI(title="NOVAHAUS API", version="0.1.0")
+app.include_router(admin_public_router)
 app.include_router(admin_router)
 
 
@@ -118,7 +120,7 @@ def get_order(order_id: str, email: str, db: Session = Depends(get_session)):
 
 
 @app.get("/api/admin/products/{product_id}/economics", response_model=EconomicsOut,
-         dependencies=[Depends(require_admin)])
+         dependencies=[Depends(require_owner)])
 def product_economics(product_id: str, cac: int = 0, db: Session = Depends(get_session)):
     p = db.get(Product, product_id)
     if p is None:

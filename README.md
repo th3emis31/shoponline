@@ -19,9 +19,30 @@ A small, dependency-free online shop for **NOVAHAUS**, calm small-space organisa
    ```
 3. The first run takes a few minutes, because it installs packages, creates the database and adds the products. Two server windows open, and then your browser opens:
    - Shop: http://localhost:3000
-   - Admin: http://localhost:3000/admin (the token is printed at the end and stored in `backend\.env`)
+   - Admin: http://localhost:3000/admin
    - API docs: http://localhost:8000/docs
-4. To stop, close the two server windows. To start again, run `run-local.cmd` again. It's safe to re-run and never deletes your data.
+4. Create your personal admin login. In the same folder, run this and type a password (at least 12 characters) when asked:
+   ```bat
+   admin-user.cmd create you@example.com --role owner
+   ```
+   Then sign in at http://localhost:3000/admin with that email and password. Use `--role staff` for helpers: staff can only manage orders, and can't see costs, prices, the funnel or the audit log.
+5. To stop, close the two server windows. To start again, run `run-local.cmd` again. It's safe to re-run and never deletes your data.
+
+### Backups
+
+```bat
+backup.cmd                          & REM make a backup and check it restores (saved in backend\backups)
+backup.cmd --list                   & REM list backups
+backup.cmd --restore FILE --yes     & REM put a backup back (stop the shop first; the current data is saved first)
+```
+
+To back up automatically every night at 2am, run this once:
+
+```bat
+schtasks /Create /SC DAILY /ST 02:00 /TN "NOVAHAUS backup" /TR "\"%USERPROFILE%\shoponline\backup.cmd\""
+```
+
+Copy `backend\backups` to an external drive or cloud storage regularly. Backups are never deleted unless you add `--keep N`, which keeps the newest N.
 
 By default it uses a local SQLite file (`backend\novahaus.db`) and payments are off. To use PostgreSQL or Stripe test mode, edit `backend\.env` (see `backend\.env.example`).
 
@@ -113,16 +134,20 @@ npm run build && npm run test:e2e              # browser tests, desktop + mobile
 
 ## Admin and analytics
 
-- **Admin** is at `/admin` and needs the `ADMIN_TOKEN` from `backend/.env`. It has four tabs:
+- **Admin** is at `/admin`. Each person signs in with their own email and password:
+  - **Accounts:** create them with `admin-user.cmd` (Windows) or `python -m app.admin_users`.
+  - **Roles:** an *owner* sees everything; *staff* see Orders only.
+  - **Security:** passwords are stored hashed (scrypt), 5 wrong attempts lock the account for 15 minutes, and sessions last 8 hours.
+  - **Shared token:** the `ADMIN_TOKEN` from `backend/.env` still works as an emergency owner login.
+- The admin area has four tabs:
   - **Orders:** mark orders shipped or cancelled. The allowed status changes are enforced, cancelling releases the stock, and paid orders can't be cancelled here (refunds go through Stripe first).
   - **Products:** price, landed cost, stock and visibility, plus each product's live contribution and **break-even ROAS**.
   - **Funnel:** conversion over the last 30 days.
-  - **Audit log:** every admin change, with its before and after values and your reason.
+  - **Audit log:** every sign-in and every admin change, with who made it, the before and after values, and the reason given.
 - **Funnel tracking:** view product → add to cart → begin checkout → purchase. It stores anonymous counts only: no cookies, no visitor IDs, no personal data. Purchases are recorded by the server, so a browser can't fake them.
 - **Safety net:** if a payment arrives for an order that was already cancelled, the order goes to `payment_review` for a human to check, rather than being ignored.
 
 ## Next steps (pending blueprint approval)
 - Pick the stack: Blueprint section K recommends FastAPI + PostgreSQL + Next.js; Shopify is the faster alternative
-- Separate admin logins per person (a single token for now)
 - Deploy: production host, domain, live Stripe keys (launch gate, section O)
 - Real product specs and photos once samples arrive

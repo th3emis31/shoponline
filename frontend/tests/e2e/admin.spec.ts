@@ -1,18 +1,48 @@
 import { expect, test } from "@playwright/test";
 
-const TOKEN = "e2e-admin-token";
+import type { Page } from "@playwright/test";
 
-async function signIn(page: import("@playwright/test").Page) {
+const TOKEN = "e2e-admin-token";
+const OWNER = { email: "owner@e2e.test", password: "e2e owner password" };
+const STAFF = { email: "staff@e2e.test", password: "e2e staff password" };
+
+async function signIn(page: Page, who = OWNER) {
   await page.goto("/admin");
-  await page.getByLabel(/Admin token/).fill(TOKEN);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Email").fill(who.email);
+  await page.getByLabel("Password").fill(who.password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByTestId("whoami")).toContainText(who.email);
 }
 
-test("wrong admin token is rejected", async ({ page }) => {
+test("wrong password is rejected", async ({ page }) => {
   await page.goto("/admin");
-  await page.getByLabel(/Admin token/).fill("wrong");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByLabel("Password").fill("not the password");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByText("Invalid email or password")).toBeVisible();
+});
+
+test("shared admin token still works, wrong token is rejected", async ({ page }) => {
+  await page.goto("/admin");
+  await page.getByRole("button", { name: /shared admin token/ }).click();
+  await page.getByLabel(/Shared admin token/).fill("wrong");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByText("Invalid admin token")).toBeVisible();
+  await page.getByLabel(/Shared admin token/).fill(TOKEN);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByTestId("whoami")).toContainText("admin-token · owner");
+});
+
+test("staff only see orders; sign out ends the session", async ({ page }) => {
+  await signIn(page, STAFF);
+  await expect(page.getByRole("button", { name: "Orders" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Products" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Audit" })).toHaveCount(0);
+  const token = await page.evaluate(() => sessionStorage.getItem("novahaus.adminToken"));
+  expect((await page.request.get("/admin-api/products", { headers: { "X-Admin-Token": token! } })).status()).toBe(403);
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByLabel("Email")).toBeVisible();
+  expect((await page.request.get("/admin-api/me", { headers: { "X-Admin-Token": token! } })).status()).toBe(401);
 });
 
 test("admin sees a new order, ships it, and it is audited", async ({ page }) => {
@@ -36,6 +66,7 @@ test("admin sees a new order, ships it, and it is audited", async ({ page }) => 
 
   await page.getByRole("button", { name: "Audit" }).click();
   await expect(page.getByTestId("audit")).toContainText("RM123456789GB");
+  await expect(page.getByTestId("audit")).toContainText(OWNER.email); // who did it
 });
 
 test("admin products show break-even ROAS and stock edits persist", async ({ page }) => {

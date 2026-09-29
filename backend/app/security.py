@@ -1,13 +1,29 @@
 import hmac
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
+from sqlalchemy.orm import Session
 
 from .config import settings
+from .db import get_session
+from .services.auth import Principal, any_users, principal_for_token
 
 
-def require_admin(x_admin_token: str = Header(default="")):
-    # Fail closed: admin endpoints are disabled unless a token is configured.
-    if not settings.admin_token:
+def require_admin(x_admin_token: str = Header(default=""), db: Session = Depends(get_session)) -> Principal:
+    """Accepts a personal admin session token, or the shared ADMIN_TOKEN (owner, break-glass)."""
+    if settings.admin_token and x_admin_token and hmac.compare_digest(
+        x_admin_token.encode(), settings.admin_token.encode()
+    ):
+        return Principal(actor="admin-token", role="owner")
+    principal = principal_for_token(db, x_admin_token)
+    if principal:
+        return principal
+    # Fail closed: with no token configured and no admin accounts, admin is disabled.
+    if not settings.admin_token and not any_users(db):
         raise HTTPException(503, "Admin access is not configured")
-    if not hmac.compare_digest(x_admin_token.encode(), settings.admin_token.encode()):
-        raise HTTPException(401, "Invalid admin token")
+    raise HTTPException(401, "Invalid admin token")
+
+
+def require_owner(principal: Principal = Depends(require_admin)) -> Principal:
+    if principal.role != "owner":
+        raise HTTPException(403, "Owner access required")
+    return principal

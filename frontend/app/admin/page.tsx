@@ -17,7 +17,7 @@ type AdminProduct = {
   contribution_margin: number; break_even_roas: number | null;
 };
 type Funnel = { days: number; steps: { type: string; count: number; rate_from_previous: number | null }[]; overall_conversion: number | null };
-type Audit = { id: number; action: string; target: string; detail: Record<string, unknown>; created_at: string };
+type Audit = { id: number; action: string; target: string; actor: string | null; detail: Record<string, unknown>; created_at: string };
 
 function session(): Storage | null {
   try { return window.sessionStorage; } catch { return null; }
@@ -27,6 +27,8 @@ const pct = (x: number | null) => (x == null ? "—" : `${(x * 100).toFixed(1)}%
 
 export default function AdminPage() {
   const [token, setToken] = useState("");
+  const [me, setMe] = useState<{ actor: string; role: string } | null>(null);
+  const [useSharedToken, setUseSharedToken] = useState(false);
   const [tab, setTab] = useState<Tab>("orders");
   const [error, setError] = useState("");
   const [orders, setOrders] = useState<AdminOrder[]>([]);
@@ -63,7 +65,43 @@ export default function AdminPage() {
     }
   }, [tab, token, call]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!token) { setMe(null); return; }
+    call<{ actor: string; role: string }>("me").then(setMe).catch((err: Error) => setError(err.message));
+  }, [token, call]);
+
+  useEffect(() => { if (me) load(); }, [load, me]);
+
+  async function signIn(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    setError("");
+    if (useSharedToken) {
+      const t = String(f.get("token") ?? "");
+      session()?.setItem(TOKEN_KEY, t);
+      setToken(t);
+      return;
+    }
+    const res = await fetch("/admin-api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: f.get("email"), password: f.get("password") }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setError(data.detail ?? "Sign-in failed"); return; }
+    session()?.setItem(TOKEN_KEY, data.token);
+    setToken(data.token);
+  }
+
+  async function signOut() {
+    await fetch("/admin-api/logout", { method: "POST", headers: { "X-Admin-Token": token } }).catch(() => {});
+    session()?.removeItem(TOKEN_KEY);
+    setToken("");
+    setMe(null);
+    setTab("orders");
+  }
+
+  const tabs: Tab[] = me?.role === "owner" ? ["orders", "products", "funnel", "audit"] : ["orders"];
 
   async function changeStatus(id: string, status: string) {
     const note = window.prompt(`Change order to "${status}". Optional note (e.g. tracking number):`, "");
@@ -88,18 +126,24 @@ export default function AdminPage() {
     } catch (err) { setError((err as Error).message); }
   }
 
-  if (!token) {
+  if (!token || !me) {
     return (
       <>
         <h1>Admin</h1>
-        <form className="stack" onSubmit={(e) => {
-          e.preventDefault();
-          const t = String(new FormData(e.currentTarget).get("token") ?? "");
-          session()?.setItem(TOKEN_KEY, t);
-          setToken(t);
-        }}>
-          <label>Admin token (ADMIN_TOKEN in backend/.env)<input name="token" type="password" required autoComplete="off" /></label>
+        <form className="stack" onSubmit={signIn}>
+          {useSharedToken ? (
+            <label>Shared admin token (ADMIN_TOKEN in backend/.env)<input name="token" type="password" required autoComplete="off" /></label>
+          ) : (
+            <>
+              <label>Email<input name="email" type="email" required autoComplete="username" /></label>
+              <label>Password<input name="password" type="password" required autoComplete="current-password" /></label>
+            </>
+          )}
           <button className="btn" type="submit">Sign in</button>
+          <button type="button" className="btn link" style={{ color: "var(--muted)", justifySelf: "start" }}
+                  onClick={() => { setUseSharedToken(!useSharedToken); setError(""); }}>
+            {useSharedToken ? "Sign in with email and password" : "Use the shared admin token instead"}
+          </button>
           {error && <p className="error">{error}</p>}
         </form>
       </>
@@ -110,10 +154,13 @@ export default function AdminPage() {
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <h1>Admin</h1>
-        <button className="btn secondary" onClick={() => { session()?.removeItem(TOKEN_KEY); setToken(""); }}>Sign out</button>
+        <div>
+          <span className="muted" data-testid="whoami">{me.actor} · {me.role}</span>{" "}
+          <button className="btn secondary" onClick={signOut}>Sign out</button>
+        </div>
       </div>
       <nav className="main" aria-label="Admin sections" style={{ marginBottom: 20 }}>
-        {(["orders", "products", "funnel", "audit"] as Tab[]).map((t) => (
+        {tabs.map((t) => (
           <button key={t} className={t === tab ? "btn" : "btn secondary"} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
@@ -190,11 +237,12 @@ export default function AdminPage() {
       {tab === "audit" && (
         audit.length === 0 ? <p>No admin changes yet.</p> : (
           <table className="lines" data-testid="audit">
-            <thead><tr><th>When</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
+            <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead>
             <tbody>
               {audit.map((a) => (
                 <tr key={a.id}>
                   <td>{new Date(a.created_at).toLocaleString("en-GB")}</td>
+                  <td>{a.actor ?? "—"}</td>
                   <td>{a.action}</td>
                   <td>{a.target}</td>
                   <td><code style={{ fontSize: "0.8rem" }}>{JSON.stringify(a.detail)}</code></td>
