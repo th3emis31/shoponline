@@ -4,6 +4,10 @@ A small, dependency-free online shop for **NOVAHAUS**, calm small-space organisa
 
 > Status: **prototype for the "Desk Reset" validation test.** Every price and cost is an ESTIMATE until real supplier quotes replace it. No live payments.
 
+## Put it online for free
+
+See **[DEPLOY.md](DEPLOY.md)** for step-by-step instructions. The shop runs on Render's free plan, the database on Neon's free plan, and payments through Stripe. You get a web address anyone in the world can open, and it costs nothing upfront.
+
 ## Run it on your PC (Windows): quick start
 
 1. Install these once, and tick **"Add python.exe to PATH"** when installing Python:

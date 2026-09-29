@@ -292,3 +292,77 @@ def update_supplier_order(so_id: int, body: SupplierOrderIn, db: Session = Depen
     db.commit()
     db.refresh(so)
     return supplier_out(so)
+
+
+# ---------------------------------------------------------------- team (owner only)
+
+class NewUserIn(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
+    role: Literal["owner", "staff"] = "staff"
+
+
+class ActiveIn(BaseModel):
+    active: bool
+
+
+class PasswordIn(BaseModel):
+    password: str = Field(min_length=1, max_length=1024)
+
+
+def _user_out(u) -> dict:
+    return {"email": u.email, "role": u.role, "active": u.active, "created_at": u.created_at}
+
+
+@router.get("/users", dependencies=[Depends(require_owner)])
+def users(db: Session = Depends(get_session)):
+    from .models import AdminUser
+    return [_user_out(u) for u in db.scalars(select(AdminUser).order_by(AdminUser.email))]
+
+
+@router.post("/users", status_code=201)
+def create_user(body: NewUserIn, db: Session = Depends(get_session), principal: Principal = Depends(require_owner)):
+    try:
+        u = auth.create_user(db, body.email, body.password, body.role)
+    except auth.AuthError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    admin.audit(db, "admin_user.create", u.email, actor=principal.actor, role=u.role)
+    db.commit()
+    return _user_out(u)
+
+
+@router.post("/users/{email}/active")
+def set_user_active(email: str, body: ActiveIn, db: Session = Depends(get_session),
+                    principal: Principal = Depends(require_owner)):
+    from .models import AdminUser
+    target = auth.normalise_email(email)
+    if not body.active:
+        if target == principal.actor:
+            raise HTTPException(400, "You can't disable your own login.")
+        user = db.scalar(select(AdminUser).where(AdminUser.email == target))
+        if user and user.role == "owner":
+            from sqlalchemy import func
+            owners = db.scalar(select(func.count()).select_from(AdminUser).where(
+                AdminUser.role == "owner", AdminUser.active.is_(True)))
+            if owners <= 1:
+                raise HTTPException(400, "This is the last active owner; add another owner first.")
+    try:
+        auth.set_active(db, target, body.active)
+    except auth.AuthError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    admin.audit(db, "admin_user.active", target, actor=principal.actor, active=body.active)
+    db.commit()
+    return {"email": target, "active": body.active}
+
+
+@router.post("/users/{email}/password")
+def reset_user_password(email: str, body: PasswordIn, db: Session = Depends(get_session),
+                        principal: Principal = Depends(require_owner)):
+    target = auth.normalise_email(email)
+    try:
+        auth.set_password(db, target, body.password)
+    except auth.AuthError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    admin.audit(db, "admin_user.password_reset", target, actor=principal.actor)
+    db.commit()
+    return {"email": target, "signed_out_everywhere": True}

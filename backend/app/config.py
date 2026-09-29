@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,6 +45,17 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment.lower() == "production"
+
+    @field_validator("database_url")
+    @classmethod
+    def use_psycopg_driver(cls, v: str) -> str:
+        """Hosted databases (Neon, Render, Heroku...) give postgres:// or postgresql:// URLs;
+        this app talks to PostgreSQL through psycopg 3."""
+        v = v.strip()
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
 
 
 settings = Settings()

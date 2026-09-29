@@ -95,3 +95,17 @@ test("funnel counts product views, adds and purchases", async ({ page }) => {
   await expect(page.getByTestId("funnel").getByRole("row", { name: /view product/ }).locator("td").nth(1))
     .toHaveText(String(Number(before) + 1));
 });
+
+test("owner manages the team from the browser", async ({ page }) => {
+  await signIn(page);
+  await page.getByRole("button", { name: "Team", exact: true }).click();
+  const team = page.getByTestId("team");
+  const email = `helper-${Date.now()}@e2e.test`;
+  await team.getByLabel("Email").fill(email);
+  await team.getByLabel(/Password/).fill("helper password 42");
+  await team.getByLabel("Role").selectOption("staff");
+  await team.getByRole("button", { name: "Add" }).click();
+  await expect(team.getByRole("status")).toContainText(`Added ${email}`);
+  await expect(team.getByRole("row", { name: new RegExp(email) })).toContainText("staff");
+  await expect(team.getByRole("row", { name: /owner@e2e.test/ })).toContainText("(you)");
+});

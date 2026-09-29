@@ -275,7 +275,14 @@ def job_margin_guard(db: Session) -> str:
 
 def job_backup(db: Session) -> str:
     from .. import backup  # local import: backup imports settings at module load
-    path = backup.create_backup()
+    try:
+        path = backup.create_backup()
+    except backup.BackupError as exc:
+        if "not found on PATH" in str(exc):
+            # Hosted PostgreSQL (e.g. Neon) without pg_dump on the server: the database
+            # provider's own point-in-time restore is the backup there.
+            return f"skipped: {exc} The database provider's own backups apply."
+        raise
     counts = backup.verify_backup(path)
     note = ""
     if settings.backup_keep > 0:

@@ -188,3 +188,41 @@ def test_cli_rejects_bad_email_before_asking_password(db, monkeypatch):
     monkeypatch.setattr(cli, "_ask_password", lambda: pytest.fail("password must not be asked"))
     with pytest.raises(SystemExit, match="not an email address"):
         cli.main(["create", "YOUR-REAL-EMAIL", "--role", "owner"])
+
+
+def test_team_management_from_the_browser(client, admin_token, db):
+    """First setup on a host without a command line: shared token -> create owner -> token off."""
+    h = hdr(admin_token)
+    r = client.post("/api/admin/users", headers=h, json={"email": "Boss@Example.com", "password": "a long enough password", "role": "owner"})
+    assert r.status_code == 201 and r.json()["email"] == "boss@example.com"
+    assert client.get("/api/admin/me", headers=h).status_code == 401  # shared token now off
+    t = hdr(login(client, "boss@example.com", "a long enough password").json()["token"])
+    assert client.post("/api/admin/users", headers=t, json={"email": "helper@example.com", "password": "short", "role": "staff"}).status_code == 400
+    assert client.post("/api/admin/users", headers=t, json={"email": "helper@example.com", "password": "helper password 1", "role": "staff"}).status_code == 201
+    assert client.post("/api/admin/users", headers=t, json={"email": "helper@example.com", "password": "helper password 1"}).status_code == 400  # duplicate
+    assert [u["email"] for u in client.get("/api/admin/users", headers=t).json()] == ["boss@example.com", "helper@example.com"]
+    # safety: can't disable yourself or the last owner
+    assert client.post("/api/admin/users/boss@example.com/active", headers=t, json={"active": False}).status_code == 400
+    # staff can't manage the team
+    s = hdr(login(client, "helper@example.com", "helper password 1").json()["token"])
+    assert client.get("/api/admin/users", headers=s).status_code == 403
+    assert client.post("/api/admin/users", headers=s, json={"email": "x@example.com", "password": "x" * 12}).status_code == 403
+    # reset + disable helper
+    assert client.post("/api/admin/users/helper@example.com/password", headers=t, json={"password": "new helper password"}).status_code == 200
+    assert client.get("/api/admin/me", headers=s).status_code == 401  # signed out everywhere
+    assert client.post("/api/admin/users/helper@example.com/active", headers=t, json={"active": False}).status_code == 200
+    assert login(client, "helper@example.com", "new helper password").status_code == 401
+    with db() as ss:
+        actions = {a.action for a in ss.query(AdminAudit).all()}
+    assert {"admin_user.create", "admin_user.password_reset", "admin_user.active"} <= actions
+
+
+def test_last_owner_cannot_be_disabled_by_another_owner(client, db):
+    with db() as s:
+        auth.create_user(s, *OWNER, "owner")
+        auth.create_user(s, "second@example.com", "second owner password", "owner")
+    t = hdr(login(client, *OWNER).json()["token"])
+    assert client.post("/api/admin/users/second@example.com/active", headers=t, json={"active": False}).status_code == 200
+    t2 = hdr(login(client, *OWNER).json()["token"])
+    # OWNER is now the last active owner and can't be disabled (by anyone, including themselves)
+    assert client.post(f"/api/admin/users/{OWNER[0]}/active", headers=t2, json={"active": False}).status_code == 400

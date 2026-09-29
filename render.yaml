@@ -1,0 +1,51 @@
+# Render Blueprint: creates the NOVAHAUS backend and shop on Render's free plan.
+# In Render: New > Blueprint > pick this repository. See DEPLOY.md for every step.
+# The database lives on Neon's free plan (it does not expire); paste its
+# connection string into DATABASE_URL when Render asks.
+services:
+  - type: web
+    name: novahaus-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Runs database updates and adds the starter products (both safe to repeat), then starts.
+    startCommand: alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production        # checkout never runs without Stripe; API docs hidden
+      - key: DATABASE_URL
+        sync: false              # paste the Neon connection string
+      - key: ADMIN_TOKEN
+        generateValue: true      # one-time setup key; stops working once you create your owner login
+      - key: PUBLIC_BASE_URL
+        sync: false              # the shop's address, e.g. https://novahaus-shop.onrender.com
+      - key: STRIPE_SECRET_KEY
+        sync: false              # sk_test_... first, sk_live_... when you go live
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false              # whsec_... from the Stripe webhook you create
+  - type: web
+    name: novahaus-shop
+    runtime: node
+    plan: free
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npx next start -p $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: API_URL
+        sync: false              # the backend's address, e.g. https://novahaus-api.onrender.com
+      - key: SITE_URL
+        sync: false              # this shop's own address
+      - key: LAUNCH_READY
+        value: "false"           # preview mode + waitlist; set "true" to open the shop
+      - key: SHOP_LEGAL_NAME
+        sync: false
+      - key: SHOP_ADDRESS
+        sync: false
+      - key: SHOP_EMAIL
+        sync: false
