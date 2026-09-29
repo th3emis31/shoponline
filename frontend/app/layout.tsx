@@ -5,8 +5,12 @@ import { site } from "@/lib/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(site.url),
   title: { default: `${site.name} — ${site.tagline}`, template: `%s · ${site.name}` },
   description: "Calm, well-made organisation pieces for small UK homes and home offices.",
+  openGraph: { siteName: site.name, locale: "en_GB", type: "website" },
+  // Preview site: keep every page out of search results until launch.
+  robots: site.launchReady ? undefined : { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

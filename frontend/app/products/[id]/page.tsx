@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import AddToCart from "@/components/AddToCart";
 import TrackView from "@/components/TrackView";
 import { getProduct } from "@/lib/api";
+import { jsonLdScript, productJsonLd } from "@/lib/jsonld";
 import { formatGBP } from "@/lib/money";
 import { site } from "@/lib/site";
 
@@ -13,7 +14,14 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProduct((await params).id);
-  return { title: product?.name ?? "Product not found" };
+  if (!product) return { title: "Product not found" };
+  const description = `${product.name}. ${formatGBP(product.price)} inc. VAT, UK delivery, ${site.returnDays}-day returns.`;
+  return {
+    title: product.name,
+    description,
+    alternates: { canonical: `/products/${product.id}` },
+    openGraph: { title: product.name, description, type: "website", url: `/products/${product.id}` },
+  };
 }
 
 export default async function ProductPage({ params }: Props) {
@@ -23,6 +31,7 @@ export default async function ProductPage({ params }: Props) {
   return (
     <div className="product">
       <TrackView productId={product.id} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(productJsonLd(product)) }} />
       <div className="ph" aria-hidden="true">Photos will be taken from the sample in hand</div>
       <div>
         {product.is_bundle && <span className="badge">Bundle</span>}

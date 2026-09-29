@@ -14,4 +14,6 @@ export const site = {
   shippingFee: 395, // pence — must match backend SHIPPING_FEE
   freeShippingThreshold: 5000, // pence — must match backend FREE_SHIPPING_THRESHOLD
   launchReady: false, // flip only when every section O gate is green
+  // Public address of the shop, used for canonical links and the sitemap.
+  url: (process.env.SITE_URL ?? "http://localhost:3000").replace(/\/$/, ""),
 };

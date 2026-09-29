@@ -132,6 +132,14 @@ npm run build && npm run test:e2e              # browser tests, desktop + mobile
 
 **Before launch:** fill in every `TODO` in `frontend/lib/site.ts` and on the Shipping, Returns and legal pages. The legal pages are placeholders that need professional review.
 
+## SEO (Blueprint weeks 7-8)
+
+- `/sitemap.xml` lists every page and product. `/robots.txt` points search engines to it.
+- Product pages carry schema.org `Product` data: price in GBP and stock status. They deliberately carry **no ratings or reviews**, which the blueprint forbids until real ones exist.
+- Each product page has its own title, description, canonical link and social-sharing tags.
+- Cart, order, track and admin pages are never indexed.
+- **While `launchReady` is `false`** in `frontend/lib/site.ts`, the whole site asks search engines not to index it. At launch, set `launchReady: true` and set `SITE_URL` to your real domain.
+
 ## Admin and analytics
 
 - **Admin** is at `/admin`. Each person signs in with their own email and password:
