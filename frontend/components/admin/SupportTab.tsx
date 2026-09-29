@@ -19,6 +19,14 @@ function TicketCard({ t, inbox, call, onError, reload }: { t: Ticket; inbox: Inb
     if (!key) return;
     try { setText((await call<{ text: string }>(`support/${t.id}/template/${key}`)).text); } catch (e) { onError((e as Error).message); }
   }
+  async function aiDraft() {
+    setBusy(true);
+    try {
+      const r = await call<{ output: string; draft_mark: string }>("ai/run", { method: "POST", body: JSON.stringify({ agent: "customer", subject: String(t.id) }) });
+      const draft = r.output.split(r.draft_mark)[1]?.trim();
+      if (draft) setText(draft);
+    } catch (e) { onError((e as Error).message); } finally { setBusy(false); }
+  }
   async function send(close: boolean) {
     setBusy(true);
     try {
@@ -53,6 +61,7 @@ function TicketCard({ t, inbox, call, onError, reload }: { t: Ticket; inbox: Inb
               {Object.entries(inbox.templates).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
+          <p><button className="btn link" onClick={aiDraft} disabled={busy}>Draft with the AI assistant</button></p>
           <label>Reply to {t.name}<textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} /></label>
           <p className="small muted">Read it through and fill in anything in [brackets] before sending.</p>
           <p>

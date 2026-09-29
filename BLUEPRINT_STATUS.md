@@ -28,10 +28,10 @@ This tracks every section of the NOVAHAUS Business Blueprint against what the co
 | I | Google Shopping product feed | ⬜ | |
 | J | Approval gate + audit log | ✅ | Admin > Approvals, and the audit log with who did what |
 | J | Automation within limits | ✅ | Reorders, the margin guard, abandoned checkouts, backups, the daily report |
-| J | AI provider interface (local Ollama / external API / future) | ⬜ | |
-| J | Agents: Research, Product, Marketing, Analytics, Customer, Inventory, SEO | ⬜ | Inventory rules exist; the AI agents don't yet |
-| J | FACT / ASSUMPTION / ESTIMATE / HYPOTHESIS labels on every output | 🟡 | Costs are labelled ESTIMATE; the AI outputs aren't built yet |
-| J | AI memory (ai_tasks, ai_memory, business_decisions) + call logging | ⬜ | |
+| J | AI provider interface (local Ollama / external API / future) | ✅ | `services/ai/providers.py`. Built-in rules are free and the default; Ollama runs locally; any OpenAI-compatible API works (personal data removed, daily cap). If the AI service fails, the built-in rules are used |
+| J | Agents: Research, Product, Marketing, Analytics, Customer, Inventory, SEO | ✅ | All seven are in Admin > AI assistants. The Customer agent drafts replies inside Support |
+| J | FACT / ASSUMPTION / ESTIMATE / HYPOTHESIS labels on every output | ✅ | Enforced in code: an unlabelled AI line becomes an unverified HYPOTHESIS |
+| J | AI memory (ai_tasks, ai_memory, business_decisions) + call logging | ✅ | Approved outputs go into memory and the decision log. Every AI call is logged by size, time and result, without storing prompts |
 | K | FastAPI + PostgreSQL + Next.js + Stripe hosted checkout | ✅ | |
 | K | Admin: separate login, role-based access | ✅ | Owner and staff roles, and the Team tab |
 | K | Background jobs | ✅ | Built-in scheduler, one runner per job |

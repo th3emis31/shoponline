@@ -395,3 +395,66 @@ class SupportReply(Base):
     by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     ticket: Mapped[SupportTicket] = relationship(back_populates="replies")
+
+
+class AITask(Base):
+    """One piece of work by an AI assistant. Output is always a DRAFT until a person approves it."""
+
+    __tablename__ = "ai_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent: Mapped[str] = mapped_column(String(20), index=True)  # research | product | marketing | ...
+    subject: Mapped[str] = mapped_column(String(200), default="")  # e.g. a product id or ticket id
+    provider: Mapped[str] = mapped_column(String(20))  # rules | ollama | api
+    output: Mapped[str] = mapped_column(Text, default="")  # each line labelled FACT/ASSUMPTION/ESTIMATE/HYPOTHESIS
+    # draft | approved | rejected | failed
+    status: Mapped[str] = mapped_column(String(10), default="draft", index=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    decision_note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AICall(Base):
+    """Log of every call to an AI service (what, how big, how long, ok or not). Prompts are not stored."""
+
+    __tablename__ = "ai_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("ai_tasks.id", ondelete="SET NULL"), nullable=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    model: Mapped[str] = mapped_column(String(100), default="")
+    prompt_chars: Mapped[int] = mapped_column(Integer, default=0)
+    output_chars: Mapped[int] = mapped_column(Integer, default=0)
+    ms: Mapped[int] = mapped_column(Integer, default=0)
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class AIMemory(Base):
+    """What the assistants should remember: approved outputs and the owner's standing notes."""
+
+    __tablename__ = "ai_memory"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(100), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class BusinessDecision(Base):
+    """Decision log: what was decided, why, on what evidence, by whom."""
+
+    __tablename__ = "business_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(200))
+    decision: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    ai_task_id: Mapped[int | None] = mapped_column(ForeignKey("ai_tasks.id", ondelete="SET NULL"), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

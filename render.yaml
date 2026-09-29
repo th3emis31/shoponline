@@ -43,6 +43,8 @@ services:
         sync: false              # shown in every email footer (UK law)
       - key: SHOP_ADDRESS
         sync: false              # postal address for email footers
+      - key: AI_PROVIDER
+        value: rules             # free built-in assistants; "api" needs AI_API_KEY + AI_MODEL (paid)
   - type: web
     name: novahaus-shop
     runtime: node

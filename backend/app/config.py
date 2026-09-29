@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     shop_legal_name: str = "NOVAHAUS"
     shop_address: str = ""
 
+    # --- AI assistants (Blueprint section J). Every output is a draft that waits for approval. ---
+    # "rules": built-in, free, no AI service (default). "ollama": a free local model on your PC.
+    # "api": any OpenAI-compatible service (costs money; needs AI_API_KEY).
+    ai_provider: str = "rules"
+    ollama_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "llama3.2"
+    ai_api_url: str = "https://api.openai.com/v1/chat/completions"
+    ai_api_key: str = ""
+    ai_model: str = ""
+    # Hard cap on AI service calls per day (cost and runaway safety). The rules engine is not counted.
+    ai_max_calls_per_day: int = 50
+
     # "production" turns on fail-safe behaviour: checkout refuses to run without
     # Stripe, and the API docs pages are hidden.
     environment: str = "development"

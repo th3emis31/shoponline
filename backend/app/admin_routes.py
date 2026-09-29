@@ -511,3 +511,76 @@ def support_status(ticket_id: int, body: SupportStatusIn, db: Session = Depends(
     admin.audit(db, f"support.{body.status}", str(ticket_id), actor=principal.actor)
     db.commit()
     return {"id": t.id, "status": t.status}
+
+
+# ---------------------------------------------------------------- AI assistants (Blueprint section J)
+
+class AIRunIn(BaseModel):
+    agent: str = Field(min_length=1, max_length=20)
+    subject: str = Field(default="", max_length=64)
+
+
+@router.get("/ai")
+def ai_overview(db: Session = Depends(get_session), principal: Principal = Depends(require_admin)):
+    from .config import settings
+    from .models import AITask, BusinessDecision
+    from .services.ai import agents, providers
+    if principal.role != "owner":
+        raise HTTPException(403, "Owner only")
+    tasks = db.scalars(select(AITask).order_by(AITask.id.desc()).limit(50)).all()
+    decisions = db.scalars(select(BusinessDecision).order_by(BusinessDecision.id.desc()).limit(50)).all()
+    return {
+        "provider": providers.name(),
+        "model": settings.ollama_model if providers.name() == "ollama" else settings.ai_model,
+        "calls_today": providers.calls_today(db), "daily_limit": settings.ai_max_calls_per_day,
+        "agents": agents.AGENTS, "needs_product": list(agents.NEEDS_PRODUCT),
+        "tasks": [{"id": t.id, "agent": t.agent, "subject": t.subject, "provider": t.provider, "output": t.output,
+                   "status": t.status, "error": t.error, "created_by": t.created_by, "decided_by": t.decided_by,
+                   "created_at": t.created_at} for t in tasks],
+        "decisions": [{"id": d.id, "title": d.title, "decision": d.decision, "reason": d.reason, "evidence": d.evidence,
+                       "decided_by": d.decided_by, "created_at": d.created_at} for d in decisions],
+    }
+
+
+@router.post("/ai/run", status_code=201)
+def ai_run(body: AIRunIn, db: Session = Depends(get_session), principal: Principal = Depends(require_admin)):
+    from .services.ai import agents
+    # Staff may only ask for customer-reply drafts; everything else is the owner's.
+    if principal.role != "owner" and body.agent != "customer":
+        raise HTTPException(403, "Owner only")
+    task = agents.run(db, body.agent, body.subject, principal.actor)
+    admin.audit(db, "ai.run", body.agent, actor=principal.actor, subject=body.subject, provider=task.provider)
+    db.commit()
+    return {"id": task.id, "agent": task.agent, "provider": task.provider, "output": task.output,
+            "status": task.status, "error": task.error, "draft_mark": agents.DRAFT_MARK}
+
+
+class AIDecideIn(BaseModel):
+    approve: bool
+    note: str = Field(default="", max_length=1000)
+
+
+@router.post("/ai/{task_id}/decide", dependencies=[Depends(require_owner)])
+def ai_decide(task_id: int, body: AIDecideIn, db: Session = Depends(get_session),
+              principal: Principal = Depends(require_owner)):
+    from .services.ai import agents
+    t = agents.decide(db, task_id, body.approve, principal.actor, body.note)
+    admin.audit(db, "ai.approve" if body.approve else "ai.reject", str(task_id), actor=principal.actor)
+    db.commit()
+    return {"id": t.id, "status": t.status}
+
+
+class DecisionIn(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    decision: str = Field(min_length=3, max_length=4000)
+    reason: str = Field(default="", max_length=2000)
+    evidence: str = Field(default="", max_length=2000)
+
+
+@router.post("/decisions", status_code=201)
+def add_decision(body: DecisionIn, db: Session = Depends(get_session), principal: Principal = Depends(require_owner)):
+    from .services.ai import agents
+    d = agents.add_decision(db, body.title, body.decision, body.reason, body.evidence, principal.actor)
+    admin.audit(db, "decision.add", body.title, actor=principal.actor)
+    db.commit()
+    return {"id": d.id}

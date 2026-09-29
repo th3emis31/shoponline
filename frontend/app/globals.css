@@ -163,3 +163,16 @@ footer.site .footer-signup { grid-column: 1 / -1; max-width: 560px; }
 .review-list { list-style: none; padding: 0; margin: 0; }
 .review-list li { border-top: 1px solid var(--line); padding: 12px 0; }
 .review-list li p { margin: 6px 0 0; }
+
+/* AI assistant output */
+.ai-output { font-size: 0.92rem; }
+.ai-line { padding: 2px 0; white-space: pre-wrap; }
+.ai-fact { color: var(--good); }
+.ai-assumption { color: #7a5a1e; }
+.ai-estimate { color: #2c5a7a; }
+.ai-hypothesis { color: #6a3f7a; }
+.ai-line.ai-fact, .ai-line.ai-assumption, .ai-line.ai-estimate, .ai-line.ai-hypothesis { color: inherit; border-left: 3px solid currentColor; padding-left: 8px; }
+.ai-line.ai-fact { border-color: var(--good); }
+.ai-line.ai-assumption { border-color: #c79a3e; }
+.ai-line.ai-estimate { border-color: #4c86ad; }
+.ai-line.ai-hypothesis { border-color: #9b6bb0; }
