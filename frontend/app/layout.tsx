@@ -1,0 +1,78 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import CampaignCapture from "@/components/CampaignCapture";
+import CartBadge from "@/components/CartBadge";
+import NewsletterForm from "@/components/NewsletterForm";
+import { formatGBP } from "@/lib/money";
+import { site } from "@/lib/site";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  metadataBase: new URL(site.url),
+  title: { default: `${site.name} — ${site.tagline}`, template: `%s · ${site.name}` },
+  description: "Calm, well-made organisation pieces for small UK homes and home offices.",
+  openGraph: { siteName: site.name, locale: "en_GB", type: "website" },
+  // Preview site: keep every page out of search results until launch.
+  robots: site.launchReady ? undefined : { index: false, follow: false },
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en-GB">
+      <body>
+        <CampaignCapture />
+        {!site.launchReady && (
+          <div className="draft-banner" role="note">
+            Preview site — not yet taking real orders.
+          </div>
+        )}
+        <div className="announcement">
+          Free UK delivery over {formatGBP(site.freeShippingThreshold)} · {site.returnDays}-day returns
+        </div>
+        <header className="site">
+          <div className="container">
+            <Link href="/" className="brand">{site.name}</Link>
+            <nav className="main" aria-label="Main">
+              <Link href="/shop">Shop</Link>
+              <Link href="/about">About</Link>
+              <Link href="/guides">Guides</Link>
+              <Link href="/faq">FAQ</Link>
+              <Link href="/track">Track order</Link>
+              <CartBadge />
+            </nav>
+          </div>
+        </header>
+        <main>
+          <div className="container">{children}</div>
+        </main>
+        <footer className="site">
+          <div className="container cols">
+            <div>
+              <strong className="brand">{site.name}</strong>
+              <p>{site.tagline}</p>
+              <p className="small">Calm, well-made organisation for small UK homes.</p>
+            </div>
+            <div>
+              <Link href="/shop">Shop</Link>
+              <Link href="/about">About</Link>
+              <Link href="/contact">Contact</Link>
+              <Link href="/faq">FAQ</Link>
+              <Link href="/guides">Guides</Link>
+            </div>
+            <div>
+              <Link href="/shipping">Shipping</Link>
+              <Link href="/returns">Returns</Link>
+              <Link href="/track">Track order</Link>
+            </div>
+            <div>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/cookies">Cookies</Link>
+            </div>
+            <div className="footer-signup"><NewsletterForm /></div>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
+}

@@ -1,0 +1,96 @@
+"""Race-safe order state changes and stock bookkeeping.
+
+Every change is a conditional UPDATE ("only if the order is still in state X"),
+so two things happening at once (a webhook, the automation, an admin click,
+two server processes) can never both apply. Stock moves only through
+`release_stock` / `reserve_stock`, which flip the order's `stock_reserved`
+flag first, so stock can't be released or reserved twice.
+
+Callers commit (or roll back on error).
+"""
+
+from datetime import datetime, timezone
+
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from ..models import Order, OrderItem, Product, SupplierOrder
+from .shop import ShopError
+
+
+def move(db: Session, order_id: str, from_statuses: set[str] | tuple[str, ...], to_status: str, **values) -> bool:
+    """Change status only if the order is still in one of `from_statuses`."""
+    res = db.execute(
+        update(Order)
+        .where(Order.id == order_id, Order.status.in_(tuple(from_statuses)))
+        .values(status=to_status, **values)
+        .execution_options(synchronize_session="fetch")
+    )
+    return res.rowcount == 1
+
+
+def _items(db: Session, order_id: str) -> list[OrderItem]:
+    """Only lines that were taken from our own stock (not dropship lines)."""
+    return list(db.scalars(select(OrderItem).where(OrderItem.order_id == order_id,
+                                                   OrderItem.from_stock.is_(True))))
+
+
+def release_stock(db: Session, order_id: str) -> bool:
+    """Put the order's items back in stock, at most once. Returns True if released."""
+    res = db.execute(
+        update(Order)
+        .where(Order.id == order_id, Order.stock_reserved.is_(True))
+        .values(stock_reserved=False)
+        .execution_options(synchronize_session="fetch")
+    )
+    if res.rowcount != 1:
+        return False
+    for item in _items(db, order_id):
+        db.execute(update(Product).where(Product.id == item.product_id)
+                   .values(stock=Product.stock + item.quantity))
+    return True
+
+
+def reserve_stock(db: Session, order_id: str) -> bool:
+    """Take the order's items out of stock again (e.g. a late payment accepted after
+    review). All or nothing: raises ShopError(409) if any item is short; the
+    caller must roll back. Returns False if stock was already reserved."""
+    res = db.execute(
+        update(Order)
+        .where(Order.id == order_id, Order.stock_reserved.is_(False))
+        .values(stock_reserved=True)
+        .execution_options(synchronize_session="fetch")
+    )
+    if res.rowcount != 1:
+        return False
+    for item in _items(db, order_id):
+        r = db.execute(update(Product)
+                       .where(Product.id == item.product_id, Product.stock >= item.quantity)
+                       .values(stock=Product.stock - item.quantity))
+        if r.rowcount != 1:
+            raise ShopError(f"Not enough stock for {item.name} to fulfil this order", 409)
+    return True
+
+
+def create_supplier_orders(db: Session, order_id: str) -> int:
+    """For a paid order, list what to buy from each supplier (dropship lines).
+    Idempotent: calling it twice never creates duplicates. Returns how many were created."""
+    created = 0
+    lines = db.scalars(select(OrderItem).where(OrderItem.order_id == order_id,
+                                               OrderItem.from_stock.is_(False)))
+    for item in lines:
+        exists = db.scalar(select(SupplierOrder.id).where(SupplierOrder.order_id == order_id,
+                                                          SupplierOrder.product_id == item.product_id))
+        if exists:
+            continue
+        product = db.get(Product, item.product_id)
+        db.add(SupplierOrder(
+            order_id=order_id, product_id=item.product_id, quantity=item.quantity,
+            supplier_name=product.supplier_name if product else "",
+            supplier_url=product.supplier_url if product else "",
+            supplier_cost_total=(product.supplier_cost if product else 0) * item.quantity,
+            sale_total=item.unit_price * item.quantity,
+            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
+        ))
+        created += 1
+    return created
