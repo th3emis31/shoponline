@@ -40,6 +40,8 @@ class CheckoutIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     email: EmailStr
     address: str = Field(min_length=1, max_length=500)
+    # Explicit opt-in for tips and offers; the checkbox is never pre-ticked.
+    marketing_consent: bool = False
 
     @field_validator("name", "address")
     @classmethod

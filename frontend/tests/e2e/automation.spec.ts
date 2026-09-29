@@ -4,7 +4,7 @@ const OWNER = { email: "owner@e2e.test", password: "e2e owner password" };
 
 async function signIn(page: Page) {
   await page.goto("/admin");
-  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByLabel("Email", { exact: true }).fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByTestId("whoami")).toContainText(OWNER.email);

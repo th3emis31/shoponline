@@ -140,6 +140,7 @@ footer.site .cols { display: grid; grid-template-columns: repeat(auto-fit, minma
 footer.site a { display: block; text-decoration: none; margin: 3px 0; }
 footer.site a:hover { color: var(--ink); }
 footer.site .brand { font-size: 1.1rem; color: var(--ink); }
+footer.site .footer-signup { grid-column: 1 / -1; max-width: 560px; }
 
 @media (max-width: 820px) {
   .hero, .feature, .product { grid-template-columns: 1fr; }

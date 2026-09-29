@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import Order, Product, StripeEvent
-from . import analytics, orders
+from . import analytics, emails, orders
 from .shop import ShopError
 
 CURRENCY = "gbp"
@@ -114,6 +114,7 @@ def reconcile_pending(db: Session, order: Order) -> str:
         expire_session(order.stripe_session_id)
     if orders.move(db, order.id, {"pending_payment"}, "cancelled"):
         orders.release_stock(db, order.id)
+        emails.on_checkout_abandoned(db, order)  # only with marketing consent
     db.commit()
     db.refresh(order)
     return order.status
@@ -149,6 +150,8 @@ def _mark_paid(db: Session, order: Order, session: dict) -> None:
         if orders.move(db, order.id, {"pending_payment"}, "paid", paid_at=datetime.now(timezone.utc)):
             analytics.record(db, "purchase", commit=False)
             orders.create_supplier_orders(db, order.id)  # dropship lines: what to buy
+            db.refresh(order)
+            emails.on_order_paid(db, order)
             return
     elif orders.move(db, order.id, {"pending_payment"}, "payment_review"):
         return  # never ship on a mismatched amount; a human must review
@@ -179,6 +182,7 @@ def handle_event(db: Session, event: dict) -> str:
             elif event_type in ("checkout.session.expired", "checkout.session.async_payment_failed"):
                 if orders.move(db, order.id, {"pending_payment"}, "cancelled"):
                     orders.release_stock(db, order.id)
+                    emails.on_checkout_abandoned(db, order)  # only with marketing consent
             db.flush()
             db.refresh(order)
             outcome = order.status

@@ -81,6 +81,21 @@ For each product, go to **Admin → Products → "How it's fulfilled" → Dropsh
 
 When a customer pays, **Admin → Supplier orders** shows what to buy, where, the customer's address and your profit. Buy it with the money the customer paid, then record the supplier's order number and tracking.
 
+## Step 6b: Emails (free)
+
+Out of the box the shop writes every email (order confirmations, delivery updates, the welcome and abandoned-cart series, review requests) into **Admin → Emails** and sends **nothing**. That lets you read them all first.
+
+To really send them, use a free SMTP service, for example Brevo (300 emails a day free) or your email provider's SMTP. Then in **novahaus-api → Environment** set:
+- `SMTP_HOST`, `SMTP_USER` and `SMTP_PASSWORD` from that service
+- `EMAIL_FROM`, for example `NOVAHAUS <hello@yourdomain>` (use an address the service has verified)
+- `SHOP_LEGAL_NAME` and `SHOP_ADDRESS`: UK law wants them in every marketing email
+- `EMAIL_MODE` = `smtp`
+
+Rules the shop follows for you:
+- Order and delivery emails always go out.
+- Marketing emails only go to people who ticked the box, and every one has an unsubscribe link.
+- `SECRET_KEY` is created by Render automatically. It signs the unsubscribe and review links.
+
 ## Step 7: Open the shop
 
 When you're ready to take real orders:

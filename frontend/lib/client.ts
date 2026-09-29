@@ -89,7 +89,7 @@ export async function joinWaitlist(email: string, productId: string | null, cons
 
 export async function checkout(
   cartId: string,
-  details: { name: string; email: string; address: string },
+  details: { name: string; email: string; address: string; marketing_consent?: boolean },
 ): Promise<Order> {
   track("begin_checkout");
   const order = await api<Order>(`/api/carts/${cartId}/checkout`, {

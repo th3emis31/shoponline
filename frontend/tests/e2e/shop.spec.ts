@@ -23,7 +23,7 @@ test("full purchase flow: product → cart → checkout → order page", async (
   await expect(totals).toContainText("£21.95");
 
   await page.getByLabel("Full name").fill("Jane Doe");
-  await page.getByLabel(/Email/).fill("jane@example.com");
+  await page.getByLabel("Email (for your receipt and tracking)").fill("jane@example.com");
   await page.getByLabel("Delivery address").fill("1 Main St, London");
   await page.getByRole("button", { name: /Continue to payment/ }).click();
 
@@ -49,7 +49,7 @@ test("free delivery over threshold and remove item", async ({ page }) => {
 test("order lookup needs the right email", async ({ page }) => {
   await page.goto("/track");
   await page.getByLabel("Order number").fill("does-not-exist");
-  await page.getByLabel("Email").fill("nobody@example.com");
+  await page.getByLabel("Email", { exact: true }).fill("nobody@example.com");
   await page.getByRole("button", { name: "Track order" }).click();
   await expect(page.locator("p.error")).toContainText("couldn't find");
 });

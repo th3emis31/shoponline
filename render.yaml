@@ -27,6 +27,22 @@ services:
         sync: false              # sk_test_... first, sk_live_... when you go live
       - key: STRIPE_WEBHOOK_SECRET
         sync: false              # whsec_... from the Stripe webhook you create
+      - key: SECRET_KEY
+        generateValue: true      # signs unsubscribe and review links in emails
+      - key: EMAIL_MODE
+        value: outbox            # emails wait in Admin > Emails; switch to smtp once SMTP is set
+      - key: EMAIL_FROM
+        sync: false              # e.g. NOVAHAUS <hello@yourdomain>
+      - key: SMTP_HOST
+        sync: false              # from a free SMTP service (see DEPLOY.md)
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SHOP_LEGAL_NAME
+        sync: false              # shown in every email footer (UK law)
+      - key: SHOP_ADDRESS
+        sync: false              # postal address for email footers
   - type: web
     name: novahaus-shop
     runtime: node

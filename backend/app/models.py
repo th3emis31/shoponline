@@ -278,3 +278,40 @@ class JobLease(Base):
     job: Mapped[str] = mapped_column(String(64), primary_key=True)
     holder: Mapped[str] = mapped_column(String(64))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class MarketingConsent(Base):
+    """Whether we may send marketing email to an address, and exactly what they agreed to."""
+
+    __tablename__ = "marketing_consents"
+
+    email: Mapped[str] = mapped_column(String(320), primary_key=True)
+    consented: Mapped[bool] = mapped_column(Boolean, default=True)
+    source: Mapped[str] = mapped_column(String(32))  # waitlist | checkout | newsletter
+    # "launch_only": one launch email (the waitlist promise). "marketing": tips and offers.
+    scope: Mapped[str] = mapped_column(String(16), default="marketing")
+    consent_text: Mapped[str] = mapped_column(Text)
+    unsubscribe_token: Mapped[str] = mapped_column(String(64), unique=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class EmailMessage(Base):
+    """Every email the shop sends (or would send, in outbox mode)."""
+
+    __tablename__ = "email_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    to_email: Mapped[str] = mapped_column(String(320), index=True)
+    subject: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(16))  # transactional | marketing
+    flow: Mapped[str] = mapped_column(String(32), index=True)  # e.g. welcome, abandoned, post_purchase
+    step: Mapped[int] = mapped_column(Integer, default=1)
+    # queued | sent | outbox | skipped | failed | cancelled
+    status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    dedupe_key: Mapped[str] = mapped_column(String(200), unique=True)
+    send_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

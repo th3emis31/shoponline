@@ -3,14 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApprovalsTab, AutomationTab, PurchaseOrdersTab } from "@/components/admin/AutomationTabs";
 import { ProductForm, SupplierOrdersTab } from "@/components/admin/DropshipTabs";
+import EmailsTab from "@/components/admin/EmailsTab";
 import TeamTab from "@/components/admin/TeamTab";
 import { formatGBP } from "@/lib/money";
 
 const TOKEN_KEY = "novahaus.adminToken";
-type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team";
+type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team" | "emails";
 const TAB_LABEL: Record<Tab, string> = {
   orders: "Orders", "supplier-orders": "Supplier orders", approvals: "Approvals", automation: "Automation",
-  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team",
+  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team", emails: "Emails",
 };
 
 type AdminOrder = {
@@ -111,7 +112,7 @@ export default function AdminPage() {
   }
 
   const tabs: Tab[] = me?.role === "owner"
-    ? ["orders", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "funnel", "audit", "team"]
+    ? ["orders", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "emails", "funnel", "audit", "team"]
     : ["orders"];
 
   async function changeStatus(id: string, status: string) {
@@ -234,6 +235,7 @@ export default function AdminPage() {
 
       {tab === "supplier-orders" && <SupplierOrdersTab call={call} onError={setError} />}
       {tab === "team" && <TeamTab call={call} onError={setError} me={me.actor} />}
+      {tab === "emails" && <EmailsTab call={call} onError={setError} />}
 
       {tab === "funnel" && funnel && (
         <>

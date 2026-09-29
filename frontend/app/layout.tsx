@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import CartBadge from "@/components/CartBadge";
+import NewsletterForm from "@/components/NewsletterForm";
 import { formatGBP } from "@/lib/money";
 import { site } from "@/lib/site";
 import "./globals.css";
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/terms">Terms</Link>
               <Link href="/cookies">Cookies</Link>
             </div>
+            <div className="footer-signup"><NewsletterForm /></div>
           </div>
         </footer>
       </body>

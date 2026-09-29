@@ -15,7 +15,7 @@ from .models import Order, Product, WaitlistSignup
 from .security import require_owner
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
 from .ratelimit import limit
-from .services import analytics, payments, shop, unit_economics
+from .services import analytics, emails, payments, shop, unit_economics
 from .services import orders as orders_svc
 from .services.shop import ShopError
 
@@ -86,6 +86,9 @@ def remove_item(cart_id: str, product_id: str, db: Session = Depends(get_session
 
 @app.post("/api/carts/{cart_id}/checkout", response_model=OrderOut, status_code=201)
 def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session)):
+    if body.marketing_consent:
+        emails.record_consent(db, str(body.email), "checkout", "marketing", emails.MARKETING_CONSENT_TEXT)
+        db.commit()
     if not payments.payments_enabled():
         if settings.is_production:
             # Fail closed: never "place" unpaid orders on a live shop.
@@ -93,6 +96,7 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
         # Development mode: no payment provider configured, order is just placed.
         order = shop.checkout(db, cart_id, body.name, str(body.email), body.address)
         orders_svc.create_supplier_orders(db, order.id)
+        emails.on_order_paid(db, order)
         analytics.record(db, "purchase")  # commits
         return shop.order_view(order)
 
@@ -151,7 +155,9 @@ def join_waitlist(body: WaitlistIn, db: Session = Depends(get_session)):
         WaitlistSignup.product_id.is_(None) if product_id is None else WaitlistSignup.product_id == product_id))
     if not exists:
         db.add(WaitlistSignup(email=email, product_id=product_id, consent_text=WAITLIST_CONSENT))
-        db.commit()
+    # The waitlist promise is ONE launch email - nothing else.
+    emails.record_consent(db, email, "waitlist", "launch_only", WAITLIST_CONSENT)
+    db.commit()
     # Same answer whether or not the email was already there (no email enumeration).
     return {"ok": True, "message": "Thanks, you're on the list. We'll email you once."}
 
@@ -159,6 +165,38 @@ def join_waitlist(body: WaitlistIn, db: Session = Depends(get_session)):
 @app.get("/api/waitlist/consent")
 def waitlist_consent():
     return {"text": WAITLIST_CONSENT}
+
+
+class NewsletterIn(BaseModel):
+    email: EmailStr
+    consent: bool
+
+
+@app.post("/api/newsletter", status_code=201, dependencies=[Depends(limit("newsletter", 10, 600))])
+def newsletter(body: NewsletterIn, db: Session = Depends(get_session)):
+    if not body.consent:
+        raise ShopError("Please tick the box to agree to receive emails.")
+    email = str(body.email).strip().lower()
+    emails.record_consent(db, email, "newsletter", "marketing", emails.MARKETING_CONSENT_TEXT)
+    emails.on_newsletter_signup(db, email)
+    db.commit()
+    return {"ok": True, "message": "Thanks! Check your inbox for a welcome email."}
+
+
+@app.get("/api/marketing/consent")
+def marketing_consent_text():
+    return {"text": emails.MARKETING_CONSENT_TEXT}
+
+
+class UnsubscribeIn(BaseModel):
+    token: str = Field(min_length=10, max_length=100)
+
+
+@app.post("/api/email/unsubscribe", dependencies=[Depends(limit("unsubscribe", 30, 600))])
+def email_unsubscribe(body: UnsubscribeIn, db: Session = Depends(get_session)):
+    if emails.unsubscribe(db, body.token) is None:
+        raise ShopError("This unsubscribe link isn't valid.", 404)
+    return {"ok": True, "message": "You're unsubscribed. We won't send you marketing emails again."}
 
 
 @app.post("/api/webhooks/stripe")

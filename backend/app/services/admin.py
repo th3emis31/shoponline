@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import AdminAudit, Order, Product
-from . import analytics, orders, unit_economics
+from . import analytics, emails, orders, unit_economics
 from .shop import ShopError
 
 # Allowed manual status changes. Paid orders are never cancelled here:
@@ -66,6 +66,11 @@ def set_order_status(db: Session, order_id: str, new_status: str, note: str = ""
             orders.reserve_stock(db, order.id)  # accepted after review: take the items again
             analytics.record(db, "purchase", commit=False)
             orders.create_supplier_orders(db, order.id)
+            db.refresh(order)
+            emails.on_order_paid(db, order)
+        if new_status == "shipped":
+            db.refresh(order)
+            emails.on_order_shipped(db, order, tracking=note)
         audit(db, "order.status", order.id, actor=actor, old=old, new=new_status, note=note)
         db.commit()
     except Exception:

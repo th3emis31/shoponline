@@ -39,6 +39,7 @@ export default function CartPage() {
         name: String(form.get("name") ?? ""),
         email: String(form.get("email") ?? ""),
         address: String(form.get("address") ?? ""),
+        marketing_consent: form.get("marketing_consent") === "on",
       });
       if (order.checkout_url) {
         window.location.assign(order.checkout_url); // Stripe hosted payment page
@@ -98,6 +99,11 @@ export default function CartPage() {
         <label>Full name<input name="name" autoComplete="name" required maxLength={200} /></label>
         <label>Email (for your receipt and tracking)<input name="email" type="email" autoComplete="email" required /></label>
         <label>Delivery address<textarea name="address" autoComplete="street-address" required rows={3} maxLength={500} /></label>
+        {/* Optional marketing opt-in: never pre-ticked (Blueprint section I, UK PECR). */}
+        <label className="consent">
+          <input type="checkbox" name="marketing_consent" />
+          <span>Email me tips for small spaces and occasional offers. I can unsubscribe at any time. (Optional)</span>
+        </label>
         <p className="muted">
           By placing the order you accept our <Link href="/terms">terms</Link>. You can cancel within 14 days of
           delivery — see <Link href="/returns">returns</Link>.

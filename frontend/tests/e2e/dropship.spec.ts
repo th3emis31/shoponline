@@ -5,7 +5,7 @@ const OWNER = { email: "owner@e2e.test", password: "e2e owner password" };
 test("dropship: owner sets supplier -> customer buys -> supplier order with profit -> ordered", async ({ page }) => {
   page.on("dialog", (d) => d.accept("SUP-778"));
   await page.goto("/admin");
-  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByLabel("Email", { exact: true }).fill(OWNER.email);
   await page.getByLabel("Password").fill(OWNER.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByTestId("whoami")).toContainText(OWNER.email);
@@ -27,7 +27,7 @@ test("dropship: owner sets supplier -> customer buys -> supplier order with prof
   await expect(page.getByRole("status")).toContainText("Added");
   await page.goto("/cart");
   await page.getByLabel("Full name").fill("Drop Ship Buyer");
-  await page.getByLabel(/Email/).fill("buyer2@example.com");
+  await page.getByLabel("Email (for your receipt and tracking)").fill("buyer2@example.com");
   await page.getByLabel("Delivery address").fill("9 Oak Road, Bristol");
   await page.getByRole("button", { name: /Continue to payment/ }).click();
   await expect(page).toHaveURL(/\/order\//);

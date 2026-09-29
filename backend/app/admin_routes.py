@@ -366,3 +366,33 @@ def reset_user_password(email: str, body: PasswordIn, db: Session = Depends(get_
     admin.audit(db, "admin_user.password_reset", target, actor=principal.actor)
     db.commit()
     return {"email": target, "signed_out_everywhere": True}
+
+
+# ---------------------------------------------------------------- emails (owner only)
+
+@router.get("/emails", dependencies=[Depends(require_owner)])
+def email_outbox(status: str | None = None, limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_session)):
+    from .config import settings
+    from .models import EmailMessage, MarketingConsent
+    from sqlalchemy import func
+    q = select(EmailMessage).order_by(EmailMessage.id.desc()).limit(limit)
+    if status:
+        q = q.where(EmailMessage.status == status)
+    consents = dict(db.execute(select(MarketingConsent.scope, func.count()).where(
+        MarketingConsent.consented.is_(True)).group_by(MarketingConsent.scope)).all())
+    return {
+        "mode": settings.email_mode if settings.smtp_host or settings.email_mode == "outbox" else "outbox",
+        "subscribers": {"marketing": consents.get("marketing", 0), "launch_only": consents.get("launch_only", 0)},
+        "messages": [{"id": m.id, "to": m.to_email, "subject": m.subject, "body": m.body, "kind": m.kind,
+                      "flow": m.flow, "step": m.step, "status": m.status, "error": m.error,
+                      "send_after": m.send_after, "sent_at": m.sent_at} for m in db.scalars(q)],
+    }
+
+
+@router.post("/emails/launch")
+def send_launch(db: Session = Depends(get_session), principal: Principal = Depends(require_owner)):
+    from .services import emails
+    n = emails.queue_launch_emails(db)
+    admin.audit(db, "email.launch", "waitlist", actor=principal.actor, queued=n)
+    db.commit()
+    return {"queued": n}

@@ -38,6 +38,21 @@ class Settings(BaseSettings):
     # Carts nobody has touched for this many days are removed by the cleanup job.
     cart_ttl_days: int = 30
 
+    # --- Email ---
+    # "outbox": emails are only stored (visible in Admin > Emails), nothing is sent.
+    # "smtp": sent through any SMTP service (e.g. Brevo/Resend free plans, or Gmail app password).
+    email_mode: str = "outbox"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    email_from: str = "NOVAHAUS <hello@example.com>"
+    # Signs links in emails (unsubscribe, reviews). Set a long random value in production.
+    secret_key: str = ""
+    # Business details required in marketing emails (UK: identify the sender).
+    shop_legal_name: str = "NOVAHAUS"
+    shop_address: str = ""
+
     # "production" turns on fail-safe behaviour: checkout refuses to run without
     # Stripe, and the API docs pages are hidden.
     environment: str = "development"

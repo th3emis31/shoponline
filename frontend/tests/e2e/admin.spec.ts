@@ -8,7 +8,7 @@ const STAFF = { email: "staff@e2e.test", password: "e2e staff password" };
 
 async function signIn(page: Page, who = OWNER) {
   await page.goto("/admin");
-  await page.getByLabel("Email").fill(who.email);
+  await page.getByLabel("Email", { exact: true }).fill(who.email);
   await page.getByLabel("Password").fill(who.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByTestId("whoami")).toContainText(who.email);
@@ -16,7 +16,7 @@ async function signIn(page: Page, who = OWNER) {
 
 test("wrong password is rejected", async ({ page }) => {
   await page.goto("/admin");
-  await page.getByLabel("Email").fill(OWNER.email);
+  await page.getByLabel("Email", { exact: true }).fill(OWNER.email);
   await page.getByLabel("Password").fill("not the password");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByText("Invalid email or password")).toBeVisible();
@@ -40,7 +40,7 @@ test("staff only see orders; sign out ends the session", async ({ page }) => {
   const token = await page.evaluate(() => sessionStorage.getItem("novahaus.adminToken"));
   expect((await page.request.get("/admin-api/products", { headers: { "X-Admin-Token": token! } })).status()).toBe(403);
   await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
   expect((await page.request.get("/admin-api/me", { headers: { "X-Admin-Token": token! } })).status()).toBe(401);
 });
 
@@ -51,7 +51,7 @@ test("admin sees a new order, ships it, and it is audited", async ({ page }) => 
   await expect(page.getByRole("status")).toContainText("Added");
   await page.goto("/cart");
   await page.getByLabel("Full name").fill("Admin Test Buyer");
-  await page.getByLabel(/Email/).fill("buyer@example.com");
+  await page.getByLabel("Email (for your receipt and tracking)").fill("buyer@example.com");
   await page.getByLabel("Delivery address").fill("2 High St, Leeds");
   await page.getByRole("button", { name: /Continue to payment/ }).click();
   await expect(page).toHaveURL(/\/order\//);
@@ -101,7 +101,7 @@ test("owner manages the team from the browser", async ({ page }) => {
   await page.getByRole("button", { name: "Team", exact: true }).click();
   const team = page.getByTestId("team");
   const email = `helper-${Date.now()}@e2e.test`;
-  await team.getByLabel("Email").fill(email);
+  await team.getByLabel("Email", { exact: true }).fill(email);
   await team.getByLabel(/Password/).fill("helper password 42");
   await team.getByLabel("Role").selectOption("staff");
   await team.getByRole("button", { name: "Add" }).click();

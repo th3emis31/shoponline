@@ -366,7 +366,14 @@ JOBS = {
     "backup": (job_backup, "daily", lambda: settings.backup_hour),
     "daily_report": (job_daily_report, "daily", lambda: settings.report_hour),
     "cleanup": (job_cleanup, "daily", lambda: 3),
+    "send_emails": (lambda db: _emails().send_due(db), "every", 5),
+    "winback_emails": (lambda db: f"queued {_emails().queue_winbacks(db)} win-back email(s)", "daily", lambda: 9),
 }
+
+
+def _emails():
+    from . import emails
+    return emails
 
 LEASE = timedelta(minutes=30)
 
