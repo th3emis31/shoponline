@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from .db import get_session
 from .security import require_admin, require_owner
-from .models import DailyReport, PurchaseOrder, Recommendation
+from .models import DailyReport, PurchaseOrder, Recommendation, WaitlistSignup
 from .services import admin, analytics, auth, automation, shop
 from .services.auth import Principal
 
@@ -179,3 +179,16 @@ def purchase_order_status(po_id: int, body: POStatusIn, db: Session = Depends(ge
 def latest_report(db: Session = Depends(get_session)):
     rep = db.scalar(select(DailyReport).order_by(DailyReport.day.desc()).limit(1))
     return {"day": rep.day, "content": rep.content} if rep else {"day": None, "content": None}
+
+
+@router.get("/waitlist", dependencies=[Depends(require_owner)])
+def waitlist(db: Session = Depends(get_session)):
+    """Smoke-test results: sign-ups per product (the blueprint's product-validation gate)."""
+    from sqlalchemy import func
+    rows = db.execute(select(WaitlistSignup.product_id, func.count()).group_by(WaitlistSignup.product_id)).all()
+    recent = db.scalars(select(WaitlistSignup).order_by(WaitlistSignup.id.desc()).limit(200)).all()
+    return {
+        "total": sum(n for _, n in rows),
+        "by_product": [{"product_id": pid or "(whole shop)", "count": n} for pid, n in sorted(rows, key=lambda r: -r[1])],
+        "recent": [{"email": w.email, "product_id": w.product_id, "created_at": w.created_at} for w in recent],
+    }

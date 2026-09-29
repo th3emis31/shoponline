@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import CartBadge from "@/components/CartBadge";
 import { formatGBP } from "@/lib/money";
 import { site } from "@/lib/site";
 import "./globals.css";
@@ -33,7 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/about">About</Link>
               <Link href="/faq">FAQ</Link>
               <Link href="/track">Track order</Link>
-              <Link href="/cart">Cart</Link>
+              <CartBadge />
             </nav>
           </div>
         </header>
@@ -43,8 +44,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="site">
           <div className="container cols">
             <div>
-              <strong>{site.name}</strong>
+              <strong className="brand">{site.name}</strong>
               <p>{site.tagline}</p>
+              <p className="small">Calm, well-made organisation for small UK homes.</p>
             </div>
             <div>
               <Link href="/shop">Shop</Link>

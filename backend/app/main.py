@@ -3,14 +3,15 @@ from typing import Literal
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import get_session
 from .admin_routes import public as admin_public_router
 from .admin_routes import router as admin_router
-from .models import Order, Product
+from .models import Order, Product, WaitlistSignup
 from .security import require_owner
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
 from .services import analytics, payments, shop, unit_economics
@@ -112,6 +113,38 @@ def track_event(body: EventIn, db: Session = Depends(get_session)):
     # Unknown product IDs are dropped so the table can't be filled with junk.
     product_id = body.product_id if body.product_id and db.get(Product, body.product_id) else None
     analytics.record(db, body.type, product_id)
+
+
+WAITLIST_CONSENT = ("Email me once when NOVAHAUS launches (or when this product is available). "
+                    "No other marketing. I can unsubscribe at any time.")
+
+
+class WaitlistIn(BaseModel):
+    email: EmailStr
+    product_id: str | None = Field(default=None, max_length=64)
+    consent: bool
+
+
+@app.post("/api/waitlist", status_code=201)
+def join_waitlist(body: WaitlistIn, db: Session = Depends(get_session)):
+    # UK rules (PECR/UK GDPR): marketing email needs a clear, positive opt-in.
+    if not body.consent:
+        raise ShopError("Please tick the box to agree to the launch email.")
+    email = str(body.email).strip().lower()
+    product_id = body.product_id if body.product_id and db.get(Product, body.product_id) else None
+    exists = db.scalar(select(WaitlistSignup).where(
+        WaitlistSignup.email == email,
+        WaitlistSignup.product_id.is_(None) if product_id is None else WaitlistSignup.product_id == product_id))
+    if not exists:
+        db.add(WaitlistSignup(email=email, product_id=product_id, consent_text=WAITLIST_CONSENT))
+        db.commit()
+    # Same answer whether or not the email was already there (no email enumeration).
+    return {"ok": True, "message": "Thanks, you're on the list. We'll email you once."}
+
+
+@app.get("/api/waitlist/consent")
+def waitlist_consent():
+    return {"text": WAITLIST_CONSENT}
 
 
 @app.post("/api/webhooks/stripe")

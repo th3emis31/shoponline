@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -212,3 +212,17 @@ class DailyReport(Base):
     day: Mapped[str] = mapped_column(String(10), unique=True)  # YYYY-MM-DD (UTC) the report covers
     content: Mapped[str] = mapped_column(Text)  # Markdown
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class WaitlistSignup(Base):
+    """'Notify me at launch' sign-ups (Blueprint section I: the smoke test measures these
+    before any stock is bought). Stored only with explicit consent."""
+
+    __tablename__ = "waitlist_signups"
+    __table_args__ = (UniqueConstraint("email", "product_id", name="waitlist_email_product"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    consent_text: Mapped[str] = mapped_column(Text)  # exactly what the person agreed to
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

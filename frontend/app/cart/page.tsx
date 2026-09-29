@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import BundleUpsell from "@/components/BundleUpsell";
+import FreeDeliveryBar from "@/components/FreeDeliveryBar";
 import { checkout, ensureCart, removeFromCart } from "@/lib/client";
 import { formatGBP } from "@/lib/money";
 import type { Cart } from "@/lib/types";
@@ -80,6 +82,9 @@ export default function CartPage() {
           ))}
         </tbody>
       </table>
+
+      <FreeDeliveryBar subtotal={cart.subtotal} />
+      <BundleUpsell cart={cart} onChange={setCart} />
 
       {/* All costs shown before payment (Blueprint section H checkout rules). */}
       <div className="totals" data-testid="totals">

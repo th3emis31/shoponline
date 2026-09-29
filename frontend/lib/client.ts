@@ -4,6 +4,16 @@ import type { Cart, Order } from "./types";
 
 const CART_KEY = "novahaus.cartId";
 const EMAIL_KEY = "novahaus.orderEmail";
+export const CART_EVENT = "novahaus:cart";
+
+/** Tell other components (e.g. the header cart count) that the cart changed. */
+function announce(cart: Cart | null) {
+  try {
+    window.dispatchEvent(new CustomEvent(CART_EVENT, { detail: cart }));
+  } catch {
+    /* not in a browser (unit tests) */
+  }
+}
 
 /** Browser-side API call through the same-origin /api proxy. */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -49,11 +59,32 @@ export async function addToCart(productId: string, quantity = 1): Promise<Cart> 
     body: JSON.stringify({ product_id: productId, quantity }),
   });
   track("add_to_cart", productId);
+  announce(updated);
   return updated;
 }
 
 export async function removeFromCart(cartId: string, productId: string): Promise<Cart> {
-  return api<Cart>(`/api/carts/${cartId}/items/${encodeURIComponent(productId)}`, { method: "DELETE" });
+  const cart = await api<Cart>(`/api/carts/${cartId}/items/${encodeURIComponent(productId)}`, { method: "DELETE" });
+  announce(cart);
+  return cart;
+}
+
+/** Current cart without creating one (null if the visitor has none yet). */
+export async function peekCart(): Promise<Cart | null> {
+  const id = storage()?.getItem(CART_KEY);
+  if (!id) return null;
+  try {
+    return await api<Cart>(`/api/carts/${encodeURIComponent(id)}`);
+  } catch {
+    return null;
+  }
+}
+
+export async function joinWaitlist(email: string, productId: string | null, consent: boolean) {
+  return api<{ ok: boolean; message: string }>("/api/waitlist", {
+    method: "POST",
+    body: JSON.stringify({ email, product_id: productId, consent }),
+  });
 }
 
 export async function checkout(
@@ -67,6 +98,7 @@ export async function checkout(
   });
   storage()?.removeItem(CART_KEY);
   rememberOrderEmail(details.email);
+  announce(null);
   return order;
 }
 
