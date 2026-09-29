@@ -43,12 +43,40 @@ if (Test-Path $PidFile) {
   Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
 }
 
-# Fallback (e.g. servers started by an older run-local): whoever listens on 8000/3000.
+# Fallback (servers from older runs, or anything run-local's PIDs missed): whoever
+# listens on 8000/3000. On Windows the backend is a chain of python processes
+# (venv launcher -> reloader -> worker) that can all hold the port, so walk UP to
+# the top-most shop process and stop that whole tree. Repeat until ports are free.
+function Get-TopShopAncestor([int]$procId) {
+  $top = $procId
+  for ($i = 0; $i -lt 10; $i++) {
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $top" -ErrorAction SilentlyContinue
+    if (-not $proc) { break }
+    $parent = Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.ParentProcessId)" -ErrorAction SilentlyContinue
+    if (-not $parent) { break }
+    $pname = [System.IO.Path]::GetFileNameWithoutExtension($parent.Name).ToLower()
+    if ($pname -notmatch $AllowedPattern) { break }   # stop at explorer/powershell/etc.
+    $top = [int]$parent.ProcessId
+  }
+  return $top
+}
+
 if ($IsWin -and (Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue)) {
-  foreach ($port in 8000, 3000) {
-    $owners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-      Select-Object -ExpandProperty OwningProcess -Unique
-    foreach ($o in $owners) { Stop-Tree ([int]$o); $stopped = $true }
+  for ($round = 0; $round -lt 3; $round++) {
+    $owners = @(Get-NetTCPConnection -LocalPort 8000, 3000 -State Listen -ErrorAction SilentlyContinue |
+      Select-Object -ExpandProperty OwningProcess -Unique)
+    if ($owners.Count -eq 0) { break }
+    foreach ($o in $owners) {
+      $p = Get-Process -Id ([int]$o) -ErrorAction SilentlyContinue
+      if ($p -and $p.ProcessName.ToLower() -match $AllowedPattern) {
+        Stop-Tree (Get-TopShopAncestor ([int]$o))
+        Stop-Tree ([int]$o)   # in case it was not under that ancestor
+        $stopped = $true
+      } elseif ($p) {
+        Write-Host "Port is used by $($p.ProcessName) (PID $o), which is not a shop process; leaving it alone."
+      }
+    }
+    Start-Sleep -Seconds 2
   }
 }
 
