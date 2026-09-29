@@ -6,6 +6,8 @@
   --muted: #6b645b;
   --line: #e4ddd2;
   --oak: #b98a5a;
+  /* Darker oak for small text and badges: meets WCAG AA 4.5:1 contrast. */
+  --oak-ink: #7a5230;
   --accent: #2f4a3a;
   --accent-hover: #243a2d;
   --accent-ink: #ffffff;
@@ -59,7 +61,7 @@ main { min-height: 60vh; padding: 24px 0 72px; }
 
 /* Home */
 .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; padding: 32px 0 16px; }
-.eyebrow { text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.78rem; color: var(--oak); font-weight: 700; margin: 0 0 10px; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.14em; font-size: 0.78rem; color: var(--oak-ink); font-weight: 700; margin: 0 0 10px; }
 .lead { font-size: 1.15rem; color: var(--muted); max-width: 560px; }
 .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 20px 0 12px; }
 .hero-art .illustration { box-shadow: var(--shadow); }
@@ -83,7 +85,7 @@ main { min-height: 60vh; padding: 24px 0 72px; }
 .card p { margin: 0; }
 .price { font-weight: 700; }
 .save { margin-left: 8px; background: #e3efe6; color: var(--good); border-radius: 999px; padding: 2px 8px; font-size: 0.78rem; font-weight: 700; }
-.badge { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; background: var(--oak); color: #fff; border-radius: 999px; padding: 3px 10px; width: fit-content; }
+.badge { display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; background: var(--oak-ink); color: #fff; border-radius: 999px; padding: 3px 10px; width: fit-content; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
 .ph { aspect-ratio: 4 / 3; background: linear-gradient(135deg, #efe7da, #e2d6c3); border-radius: 8px; display: grid; place-items: center; color: var(--muted); font-size: 0.85rem; text-align: center; padding: 8px; }
 
@@ -159,7 +161,7 @@ footer.site .footer-signup { grid-column: 1 / -1; max-width: 560px; }
 .stars { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .stars legend { font-weight: 600; margin-bottom: 4px; }
 .stars label { display: inline-flex; gap: 6px; align-items: center; }
-.stars-shown { color: var(--oak); letter-spacing: 1px; }
+.stars-shown { color: var(--oak-ink); letter-spacing: 1px; }
 .review-list { list-style: none; padding: 0; margin: 0; }
 .review-list li { border-top: 1px solid var(--line); padding: 12px 0; }
 .review-list li p { margin: 6px 0 0; }

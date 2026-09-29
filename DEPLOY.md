@@ -103,6 +103,8 @@ When you're ready to take real orders:
 2. Put the live keys into **novahaus-api**.
 3. Set **novahaus-shop → `LAUNCH_READY`** to `true`. The preview banner goes away and search engines may list the shop.
 
+**Launch checklist:** Admin → **Launch checklist** shows the blueprint's 14 gates. Launch when all 14 are green. For the Website gate, test your live address at https://pagespeed.web.dev (mobile) and type in the performance score.
+
 **Before step 7, please make sure:**
 - The Privacy, Terms and Cookies pages have been properly written. They're placeholders now.
 - Your Returns page matches what you'll actually do. UK customers can cancel within 14 days even when a supplier ships the item.

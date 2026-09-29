@@ -5,6 +5,7 @@ import { ApprovalsTab, AutomationTab, PurchaseOrdersTab } from "@/components/adm
 import { ProductForm, SupplierOrdersTab } from "@/components/admin/DropshipTabs";
 import AITab from "@/components/admin/AITab";
 import CampaignsTab from "@/components/admin/CampaignsTab";
+import LaunchTab from "@/components/admin/LaunchTab";
 import EmailsTab from "@/components/admin/EmailsTab";
 import ReviewsTab from "@/components/admin/ReviewsTab";
 import SupportTab from "@/components/admin/SupportTab";
@@ -12,10 +13,10 @@ import TeamTab from "@/components/admin/TeamTab";
 import { formatGBP } from "@/lib/money";
 
 const TOKEN_KEY = "novahaus.adminToken";
-type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team" | "emails" | "reviews" | "campaigns" | "support" | "ai";
+type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team" | "emails" | "reviews" | "campaigns" | "support" | "ai" | "launch";
 const TAB_LABEL: Record<Tab, string> = {
   orders: "Orders", "supplier-orders": "Supplier orders", approvals: "Approvals", automation: "Automation",
-  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team", emails: "Emails", reviews: "Reviews", campaigns: "Campaigns", support: "Support", ai: "AI assistants",
+  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team", emails: "Emails", reviews: "Reviews", campaigns: "Campaigns", support: "Support", ai: "AI assistants", launch: "Launch checklist",
 };
 
 type AdminOrder = {
@@ -116,7 +117,7 @@ export default function AdminPage() {
   }
 
   const tabs: Tab[] = me?.role === "owner"
-    ? ["orders", "support", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "reviews", "emails", "campaigns", "ai", "funnel", "audit", "team"]
+    ? ["orders", "support", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "reviews", "emails", "campaigns", "ai", "launch", "funnel", "audit", "team"]
     : ["orders", "support", "reviews"];
 
   async function changeStatus(id: string, status: string) {
@@ -244,6 +245,7 @@ export default function AdminPage() {
       {tab === "campaigns" && <CampaignsTab call={call} onError={setError} />}
       {tab === "support" && <SupportTab call={call} onError={setError} />}
       {tab === "ai" && <AITab call={call} onError={setError} />}
+      {tab === "launch" && <LaunchTab call={call} onError={setError} />}
 
       {tab === "funnel" && funnel && (
         <>

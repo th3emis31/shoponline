@@ -458,3 +458,16 @@ class BusinessDecision(Base):
     ai_task_id: Mapped[int | None] = mapped_column(ForeignKey("ai_tasks.id", ondelete="SET NULL"), nullable=True)
     decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class LaunchGate(Base):
+    """The owner's confirmation for one launch gate (Blueprint section O)."""
+
+    __tablename__ = "launch_gates"
+
+    gate: Mapped[str] = mapped_column(String(32), primary_key=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    value: Mapped[str] = mapped_column(String(100), default="")  # e.g. the Lighthouse score
+    note: Mapped[str] = mapped_column(Text, default="")
+    confirmed_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

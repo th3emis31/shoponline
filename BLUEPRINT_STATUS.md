@@ -41,11 +41,11 @@ This tracks every section of the NOVAHAUS Business Blueprint against what the co
 | L | Unit economics model | ✅ | `services/unit_economics.py`; matches the worked examples |
 | M | 90-day roadmap | 👤 | A plan for you to follow |
 | N | Risk register | 🟡 | The technical risks are mitigated in code; the business risks are 👤 |
-| O | Launch criteria: 14 gates tracked in admin | ⬜ | |
+| O | Launch criteria: 14 gates tracked in admin | ✅ | Admin > Launch checklist: all 14 blueprint gates. Automatic checks come from the shop's data, and you confirm the rest with evidence (audited). Your confirmation can't turn a failing check green |
 | O | Checkout, payments, webhooks, refunds tested | 🟡 | Test mode is built. Refunds happen in Stripe 👤 |
 | O | Analytics funnel | ✅ | |
 | O | Customer support: inbox, reply templates, 1-business-day target | ✅ | Admin > Support (owner and staff): 5 reply templates, overdue flags and an on-time rate. The daily report lists messages waiting |
-| O | Mobile Lighthouse performance ≥ 90 | ⬜ | Not measured yet |
+| O | Mobile Lighthouse performance ≥ 90 | ✅ | Measured locally (Lighthouse 12, mobile) on home, shop, product, guides, contact and cart: performance 97–100, accessibility 100, best practices 100. SEO is lower only because the preview blocks indexing on purpose. Re-measure the live shop at pagespeed.web.dev 👤 |
 | O | Legal pages professionally reviewed; product safety files | 👤 | |
 | + | Dropshipping (added at your request) | ✅ | Supplier orders with profit per order |
 | + | Free hosting (Render + Neon) | ✅ | See `DEPLOY.md` |

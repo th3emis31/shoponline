@@ -584,3 +584,30 @@ def add_decision(body: DecisionIn, db: Session = Depends(get_session), principal
     admin.audit(db, "decision.add", body.title, actor=principal.actor)
     db.commit()
     return {"id": d.id}
+
+
+# ---------------------------------------------------------------- launch checklist (Blueprint section O)
+
+@router.get("/launch", dependencies=[Depends(require_owner)])
+def launch_checklist(db: Session = Depends(get_session)):
+    from .services import launch
+    return launch.checklist(db)
+
+
+class GateIn(BaseModel):
+    confirmed: bool
+    value: str = Field(default="", max_length=100)
+    note: str = Field(default="", max_length=2000)
+
+
+@router.post("/launch/{gate}")
+def sign_gate(gate: str, body: GateIn, db: Session = Depends(get_session), principal: Principal = Depends(require_owner)):
+    from .services import launch
+    try:
+        launch.sign(db, gate, body.confirmed, body.value, body.note, principal.actor)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    admin.audit(db, "launch.confirm" if body.confirmed else "launch.unconfirm", gate, actor=principal.actor,
+                value=body.value)
+    db.commit()
+    return launch.checklist(db)
