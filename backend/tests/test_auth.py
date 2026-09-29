@@ -153,3 +153,17 @@ def test_cli_create_list_disable(db, monkeypatch, capsys):
     assert "DISABLED" in capsys.readouterr().out
     with pytest.raises(SystemExit, match="already exists"):
         cli.main(["create", "boss@example.com"])
+
+
+def test_cli_password_prompt_retries(monkeypatch, capsys):
+    import app.admin_users as cli
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    answers = iter(["short", "long enough pass", "different pass!!", "long enough pass", "long enough pass"])
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(answers))
+    assert cli._ask_password() == "long enough pass"
+    out = capsys.readouterr().out
+    assert "Too short: that was 5 characters" in out and "didn't match" in out
+    answers2 = iter(["x"] * 3)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(answers2))
+    with pytest.raises(SystemExit, match="Nothing was changed"):
+        cli._ask_password()

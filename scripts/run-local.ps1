@@ -103,6 +103,19 @@ if ($SetupOnly) {
 }
 
 # ---------- 4. Start ----------
+function Test-PortInUse($port) {
+  $client = New-Object System.Net.Sockets.TcpClient
+  try {
+    $task = $client.ConnectAsync("127.0.0.1", $port)
+    return ($task.Wait(1000) -and $client.Connected)
+  } catch { return $false } finally { $client.Close() }
+}
+$busy = @(8000, 3000 | Where-Object { Test-PortInUse $_ })
+if ($busy.Count -gt 0) {
+  Fail ("The shop (or another program) is already running on port(s) $($busy -join ', ').`n" +
+        "Close the NOVAHAUS server windows first, then run run-local.cmd again.`n" +
+        "(Setup and database updates above were applied; only the start was skipped.)")
+}
 Step "Starting backend (http://localhost:8000) and shop (http://localhost:3000)"
 $uvicornArgs = @("-m", "uvicorn", "app.main:app", "--reload", "--port", "8000")
 $be = Start-Process -FilePath $VenvPy -ArgumentList $uvicornArgs -WorkingDirectory $Backend -PassThru

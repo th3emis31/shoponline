@@ -22,15 +22,23 @@ from .models import AdminUser
 from .services import auth
 
 
-def _ask_password() -> str:
+def _ask_password(attempts: int = 3) -> str:
     # ADMIN_PASSWORD is only for automated tests/scripts; people use the prompt.
     env = os.environ.get("ADMIN_PASSWORD")
     if env:
         return env
-    first = getpass.getpass(f"New password (min {auth.MIN_PASSWORD_LENGTH} characters): ")
-    if first != getpass.getpass("Repeat password: "):
-        sys.exit("Passwords did not match. Nothing was changed.")
-    return first
+    print("(Nothing is shown while you type the password - that's normal.)")
+    for _ in range(attempts):
+        first = getpass.getpass(f"New password (at least {auth.MIN_PASSWORD_LENGTH} characters): ")
+        if len(first) < auth.MIN_PASSWORD_LENGTH:
+            print(f"Too short: that was {len(first)} characters. Please use at least "
+                  f"{auth.MIN_PASSWORD_LENGTH} (a short phrase works well, e.g. 'blue desk lamp 2026').")
+            continue
+        if first != getpass.getpass("Repeat password: "):
+            print("The two passwords didn't match. Please try again.")
+            continue
+        return first
+    sys.exit("No password set. Nothing was changed.")
 
 
 def main(argv: list[str] | None = None) -> int:
