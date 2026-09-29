@@ -132,6 +132,33 @@ npm run build && npm run test:e2e              # browser tests, desktop + mobile
 
 **Before launch:** fill in every `TODO` in `frontend/lib/site.ts` and on the Shipping, Returns and legal pages. The legal pages are placeholders that need professional review.
 
+## Automation: automatic within limits (Blueprint section J)
+
+The shop runs these jobs **by itself while it is running**. Admin > Automation shows each job's last result and has a **Run now** button for each one. You can also run them from Command Prompt:
+
+```bat
+automation.cmd status              & REM jobs, limits, last runs
+automation.cmd run                 & REM run every job now
+automation.cmd run low_stock       & REM run one job
+automation.cmd report              & REM latest daily report
+```
+
+| Job | When | What it does |
+|---|---|---|
+| close abandoned checkouts | every 15 min | Checks unpaid checkouts older than 90 minutes against Stripe. A payment whose webhook was missed is marked paid. An abandoned checkout is closed at Stripe and its stock released. If Stripe errors, the order is left alone. |
+| low stock | every 60 min | When stock reaches a product's reorder point, it suggests a reorder. |
+| margin guard | every 6 h | If a product's margin falls below 35% (for example after a cost update), it suggests the lowest price that restores it. |
+| backup | daily, after 02:00 UTC | Makes a backup and checks that it restores. |
+| daily report | daily, after 06:00 UTC | Yesterday's sales, estimated contribution and funnel, plus what needs attention. |
+
+**Limits**, set in `backend\.env`:
+- A reorder runs automatically only up to **£100 each and £300 per week**.
+- A price change runs automatically only if it is a **rise of up to 5%**. The automation **never lowers prices**.
+- Anything bigger waits in **Admin > Approvals** for one click.
+- Every automatic action is in the audit log as `automation`.
+- A reorder creates a **purchase order** ("ready to send"). Marking it *received* adds the stock.
+- `AUTOMATION_ENABLED=false` turns the schedule off. The Run now buttons and `automation.cmd` still work.
+
 ## SEO (Blueprint weeks 7-8)
 
 - `/sitemap.xml` lists every page and product. `/robots.txt` points search engines to it.

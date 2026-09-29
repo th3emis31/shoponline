@@ -16,5 +16,19 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:3000"
     checkout_expiry_minutes: int = 30  # Stripe minimum is 30
 
+    # --- Automation (runs inside the backend; see app/services/automation.py) ---
+    automation_enabled: bool = True
+    # Limits for acting WITHOUT asking. Anything above waits in Admin > Approvals.
+    auto_reorder_max: int = 10000          # pence per purchase order (GBP 100)
+    auto_reorder_weekly_max: int = 30000   # pence of auto-approved reorders per 7 days (GBP 300)
+    auto_price_max_pct: float = 5.0        # max automatic price RISE in %; never lowers prices
+    # Blueprint gate 2: contribution before ads >= 35% of ex-VAT price.
+    min_contribution_margin: float = 0.35
+    # Unpaid checkouts older than this are checked with Stripe and closed.
+    pending_payment_timeout_minutes: int = 90
+    # Daily jobs, hour of day in UTC.
+    backup_hour: int = 2
+    report_hour: int = 6
+
 
 settings = Settings()

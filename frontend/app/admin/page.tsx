@@ -1,10 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ApprovalsTab, AutomationTab, PurchaseOrdersTab } from "@/components/admin/AutomationTabs";
 import { formatGBP } from "@/lib/money";
 
 const TOKEN_KEY = "novahaus.adminToken";
-type Tab = "orders" | "products" | "funnel" | "audit";
+type Tab = "orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit";
+const TAB_LABEL: Record<Tab, string> = {
+  orders: "Orders", approvals: "Approvals", automation: "Automation", "purchase-orders": "Purchase orders",
+  products: "Products", funnel: "Funnel", audit: "Audit",
+};
 
 type AdminOrder = {
   id: string; status: string; total: number; created_at: string; customer_name: string;
@@ -101,7 +106,9 @@ export default function AdminPage() {
     setTab("orders");
   }
 
-  const tabs: Tab[] = me?.role === "owner" ? ["orders", "products", "funnel", "audit"] : ["orders"];
+  const tabs: Tab[] = me?.role === "owner"
+    ? ["orders", "approvals", "automation", "purchase-orders", "products", "funnel", "audit"]
+    : ["orders"];
 
   async function changeStatus(id: string, status: string) {
     const note = window.prompt(`Change order to "${status}". Optional note (e.g. tracking number):`, "");
@@ -162,11 +169,15 @@ export default function AdminPage() {
       <nav className="main" aria-label="Admin sections" style={{ marginBottom: 20 }}>
         {tabs.map((t) => (
           <button key={t} className={t === tab ? "btn" : "btn secondary"} onClick={() => setTab(t)}>
-            {t[0].toUpperCase() + t.slice(1)}
+            {TAB_LABEL[t]}
           </button>
         ))}
       </nav>
       {error && <p className="error" data-testid="admin-error">{error}</p>}
+
+      {tab === "approvals" && <ApprovalsTab call={call} onError={setError} />}
+      {tab === "automation" && <AutomationTab call={call} onError={setError} />}
+      {tab === "purchase-orders" && <PurchaseOrdersTab call={call} onError={setError} />}
 
       {tab === "orders" && (
         orders.length === 0 ? <p>No orders yet.</p> : (
@@ -200,7 +211,9 @@ export default function AdminPage() {
       {tab === "products" && (
         <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
           {products.map((p) => (
-            <form key={p.id} className="panel stack" data-testid={`product-${p.id}`}
+            // Key includes the values: when fresh data arrives the form is rebuilt, so it can
+            // never show (and then save back) stale numbers.
+            <form key={`${p.id}:${p.price}:${p.landed_cost}:${p.stock}:${p.active}`} className="panel stack" data-testid={`product-${p.id}`}
                   onSubmit={(e) => { e.preventDefault(); saveProduct(p.id, e.currentTarget); }}>
               <strong>{p.name}</strong>
               <div className="muted" style={{ fontSize: "0.9rem" }}>

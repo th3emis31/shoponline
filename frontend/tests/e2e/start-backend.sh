@@ -10,6 +10,8 @@ export DATABASE_URL="sqlite:///$E2E_DIR/e2e.db"
 # Payments off: E2E covers the storefront flow, Stripe is covered by backend tests.
 export STRIPE_SECRET_KEY="" STRIPE_WEBHOOK_SECRET=""
 export ADMIN_TOKEN="e2e-admin-token"
+# Scheduled jobs off in tests; the tests trigger jobs with "Run now".
+export AUTOMATION_ENABLED=false
 PY="${PYTHON:-python3}"
 "$PY" -m alembic upgrade head
 "$PY" -m app.seed

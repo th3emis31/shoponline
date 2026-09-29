@@ -66,6 +66,45 @@ def create_checkout_session(order: Order) -> tuple[str, str]:
     return session.id, session.url
 
 
+def retrieve_session(session_id: str) -> dict:
+    """Current state of a Checkout Session from Stripe, as a plain dict."""
+    session = _stripe_client().v1.checkout.sessions.retrieve(session_id)
+    return {
+        "id": session.id,
+        "status": session.status,  # open | complete | expired
+        "payment_status": session.payment_status,  # paid | unpaid | no_payment_required
+        "amount_total": session.amount_total,
+        "currency": session.currency,
+    }
+
+
+def expire_session(session_id: str) -> None:
+    """Close a still-open Checkout Session so it can no longer be paid."""
+    _stripe_client().v1.checkout.sessions.expire(session_id)
+
+
+def reconcile_pending(db: Session, order: Order) -> str:
+    """Settle an old pending_payment order against Stripe's own record.
+
+    Safe by construction: an order is only cancelled after Stripe confirms the
+    session is expired (or we expire it ourselves, so it can't be paid later).
+    Any Stripe error leaves the order untouched for the next run.
+    """
+    if order.status != "pending_payment" or not order.stripe_session_id:
+        return "skipped"
+    session = retrieve_session(order.stripe_session_id)
+    if session["status"] == "complete" and session["payment_status"] == "paid":
+        _mark_paid(db, order, session)
+        db.commit()
+        return order.status  # paid, or payment_review on mismatch
+    if session["status"] == "open":
+        expire_session(order.stripe_session_id)
+    order.status = "cancelled"
+    release_stock(db, order)
+    db.commit()
+    return "cancelled"
+
+
 def release_stock(db: Session, order: Order) -> None:
     for item in order.items:
         db.execute(

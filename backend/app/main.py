@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Request
@@ -15,7 +16,16 @@ from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, Pro
 from .services import analytics, payments, shop, unit_economics
 from .services.shop import ShopError
 
-app = FastAPI(title="NOVAHAUS API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    from . import scheduler
+    if settings.automation_enabled:
+        scheduler.start()
+    yield
+    scheduler.stop()
+
+
+app = FastAPI(title="NOVAHAUS API", version="0.1.0", lifespan=lifespan)
 app.include_router(admin_public_router)
 app.include_router(admin_router)
 

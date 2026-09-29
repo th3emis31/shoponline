@@ -31,6 +31,9 @@ class Product(Base):
     landed_cost: Mapped[int] = mapped_column(Integer, default=0)
     shipping_cost: Mapped[int] = mapped_column(Integer, default=0)
     packaging_cost: Mapped[int] = mapped_column(Integer, default=0)
+    # Automation: when stock falls to reorder_point, suggest ordering reorder_qty.
+    reorder_point: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
+    reorder_qty: Mapped[int] = mapped_column(Integer, default=20, server_default="20")
 
 
 class Cart(Base):
@@ -149,3 +152,63 @@ class AdminSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     user: Mapped[AdminUser] = relationship()
+
+
+class Recommendation(Base):
+    """Something the automation wants to do. Runs by itself only within the limits in settings;
+    otherwise it waits for a human in Admin > Approvals."""
+
+    __tablename__ = "recommendations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)  # reorder | price_change
+    target: Mapped[str] = mapped_column(String(64))  # product id
+    payload: Mapped[str] = mapped_column(Text)  # JSON
+    reason: Mapped[str] = mapped_column(Text)
+    impact: Mapped[int] = mapped_column(Integer, default=0)  # pence (cost of a reorder, price delta)
+    # pending | approved | rejected | executed | failed
+    status: Mapped[str] = mapped_column(String(16), index=True, default="pending")
+    auto: Mapped[bool] = mapped_column(Boolean, default=False)  # decided by the automation itself
+    decision_note: Mapped[str] = mapped_column(Text, default="")
+    decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class PurchaseOrder(Base):
+    """Stock to order from a supplier. 'approved' means ready to send; receiving adds stock."""
+
+    __tablename__ = "purchase_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    product_id: Mapped[str] = mapped_column(ForeignKey("products.id"), index=True)
+    quantity: Mapped[int] = mapped_column(Integer)
+    unit_cost: Mapped[int] = mapped_column(Integer)  # pence, ESTIMATE until supplier quote
+    total: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), default="approved")  # approved|sent|received|cancelled
+    recommendation_id: Mapped[int | None] = mapped_column(ForeignKey("recommendations.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AutomationRun(Base):
+    """One run of an automation job, for visibility and scheduling."""
+
+    __tablename__ = "automation_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job: Mapped[str] = mapped_column(String(64), index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # ok | error | skipped
+    message: Mapped[str] = mapped_column(Text, default="")
+
+
+class DailyReport(Base):
+    __tablename__ = "daily_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    day: Mapped[str] = mapped_column(String(10), unique=True)  # YYYY-MM-DD (UTC) the report covers
+    content: Mapped[str] = mapped_column(Text)  # Markdown
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
