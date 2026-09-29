@@ -13,6 +13,8 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const headers = new Headers({ "content-type": "application/json" });
   const token = req.headers.get("x-admin-token");
   if (token) headers.set("x-admin-token", token);
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) headers.set("x-forwarded-for", fwd); // sign-in rate limit per visitor
   try {
     const res = await fetch(target, {
       method: req.method,

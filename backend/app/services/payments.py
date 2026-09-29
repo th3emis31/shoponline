@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import Order, Product, StripeEvent
-from . import analytics
+from . import analytics, orders
 from .shop import ShopError
 
 CURRENCY = "gbp"
@@ -86,31 +86,42 @@ def expire_session(session_id: str) -> None:
 def reconcile_pending(db: Session, order: Order) -> str:
     """Settle an old pending_payment order against Stripe's own record.
 
-    Safe by construction: an order is only cancelled after Stripe confirms the
-    session is expired (or we expire it ourselves, so it can't be paid later).
+    - Paid at Stripe (webhook missed): marked paid (or payment_review on mismatch).
+    - Payment still in progress (e.g. bank debit, "complete" but "unpaid"): left alone.
+    - Abandoned: the Stripe session is expired first, so it can no longer be paid,
+      then the order is cancelled and its stock released (once).
+    - No session saved (server stopped mid-checkout): the session is recovered via
+      the same idempotency key, then handled as above.
     Any Stripe error leaves the order untouched for the next run.
     """
-    if order.status != "pending_payment" or not order.stripe_session_id:
+    if order.status != "pending_payment":
         return "skipped"
+    if not order.stripe_session_id:
+        session_id, _ = create_checkout_session(order)  # idempotent: same key -> same session
+        db.execute(update(Order).where(Order.id == order.id, Order.stripe_session_id.is_(None))
+                   .values(stripe_session_id=session_id))
+        db.commit()
+        db.refresh(order)
     session = retrieve_session(order.stripe_session_id)
     if session["status"] == "complete" and session["payment_status"] == "paid":
         _mark_paid(db, order, session)
         db.commit()
+        db.refresh(order)
         return order.status  # paid, or payment_review on mismatch
+    if session["status"] == "complete":
+        return "waiting: payment in progress"
     if session["status"] == "open":
         expire_session(order.stripe_session_id)
-    order.status = "cancelled"
-    release_stock(db, order)
+    if orders.move(db, order.id, {"pending_payment"}, "cancelled"):
+        orders.release_stock(db, order.id)
     db.commit()
-    return "cancelled"
+    db.refresh(order)
+    return order.status
 
 
 def release_stock(db: Session, order: Order) -> None:
-    for item in order.items:
-        db.execute(
-            update(Product).where(Product.id == item.product_id)
-            .values(stock=Product.stock + item.quantity)
-        )
+    """Kept for compatibility; releases at most once via the order's stock flag."""
+    orders.release_stock(db, order.id)
 
 
 def verify_event(payload: bytes, signature: str | None) -> dict:
@@ -132,22 +143,17 @@ def _order_for_session(db: Session, session: dict) -> Order | None:
 
 
 def _mark_paid(db: Session, order: Order, session: dict) -> None:
-    if order.status == "cancelled":
-        # Money arrived for an order already cancelled (stock released):
-        # never ship or ignore it silently — a human must review / refund.
-        order.status = "payment_review"
-        return
-    if order.status != "pending_payment":
-        return
     amount_ok = session.get("amount_total") == order.total
     currency_ok = (session.get("currency") or "").lower() == CURRENCY
     if amount_ok and currency_ok:
-        order.status = "paid"
-        order.paid_at = datetime.now(timezone.utc)
-        analytics.record(db, "purchase", commit=False)
-    else:
-        # Never ship on a mismatched amount; a human must review.
-        order.status = "payment_review"
+        if orders.move(db, order.id, {"pending_payment"}, "paid", paid_at=datetime.now(timezone.utc)):
+            analytics.record(db, "purchase", commit=False)
+            return
+    elif orders.move(db, order.id, {"pending_payment"}, "payment_review"):
+        return  # never ship on a mismatched amount; a human must review
+    # Money arrived for an order already cancelled (its stock was released):
+    # never ship it or ignore it silently - a human must review / refund.
+    orders.move(db, order.id, {"cancelled"}, "payment_review")
 
 
 def handle_event(db: Session, event: dict) -> str:
@@ -167,15 +173,14 @@ def handle_event(db: Session, event: dict) -> str:
             if event_type == "checkout.session.completed":
                 if session.get("payment_status") == "paid":
                     _mark_paid(db, order, session)
-                outcome = order.status
             elif event_type == "checkout.session.async_payment_succeeded":
                 _mark_paid(db, order, session)
-                outcome = order.status
             elif event_type in ("checkout.session.expired", "checkout.session.async_payment_failed"):
-                if order.status == "pending_payment":
-                    order.status = "cancelled"
-                    release_stock(db, order)
-                outcome = order.status
+                if orders.move(db, order.id, {"pending_payment"}, "cancelled"):
+                    orders.release_stock(db, order.id)
+            db.flush()
+            db.refresh(order)
+            outcome = order.status
         db.add(StripeEvent(id=event_id, type=event_type))
         db.commit()
     except Exception:

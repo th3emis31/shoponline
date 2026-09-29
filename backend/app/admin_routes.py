@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import get_session
+from .ratelimit import limit
 from .security import require_admin, require_owner
 from .models import DailyReport, PurchaseOrder, Recommendation, WaitlistSignup
 from .services import admin, analytics, auth, automation, shop
@@ -21,7 +22,7 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
-@public.post("/login")
+@public.post("/login", dependencies=[Depends(limit("login", 20, 600))])
 def login(body: LoginIn, db: Session = Depends(get_session)):
     try:
         token, user, expires = auth.login(db, body.email, body.password)
@@ -53,10 +54,17 @@ class ProductPatch(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
-def admin_order(o) -> dict:
+def next_for(o, role: str) -> list[str]:
+    options = admin.TRANSITIONS.get(o.status, set())
+    if role != "owner":
+        options = {s for s in options if (o.status, s) in admin.STAFF_TRANSITIONS}
+    return sorted(options)
+
+
+def admin_order(o, role: str = "owner") -> dict:
     return {**shop.order_view(o), "customer_name": o.customer_name, "customer_email": o.customer_email,
             "shipping_address": o.shipping_address, "paid_at": o.paid_at,
-            "next_statuses": sorted(admin.TRANSITIONS.get(o.status, set()))}
+            "next_statuses": next_for(o, role)}
 
 
 @router.get("/me")
@@ -65,22 +73,24 @@ def me(principal: Principal = Depends(require_admin)):
 
 
 @router.get("/orders")
-def orders(status: str | None = None, limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_session)):
-    return [admin_order(o) for o in admin.list_orders(db, status, limit)]
+def orders(status: str | None = None, limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_session),
+           principal: Principal = Depends(require_admin)):
+    return [admin_order(o, principal.role) for o in admin.list_orders(db, status, limit)]
 
 
 @router.get("/orders/{order_id}")
-def order(order_id: str, db: Session = Depends(get_session)):
+def order(order_id: str, db: Session = Depends(get_session), principal: Principal = Depends(require_admin)):
     o = db.get(admin.Order, order_id)
     if o is None:
         raise shop.ShopError("Order not found", 404)
-    return admin_order(o)
+    return admin_order(o, principal.role)
 
 
 @router.post("/orders/{order_id}/status")
 def order_status(order_id: str, body: StatusIn, db: Session = Depends(get_session),
                  principal: Principal = Depends(require_admin)):
-    return admin_order(admin.set_order_status(db, order_id, body.status, body.note, actor=principal.actor))
+    return admin_order(admin.set_order_status(db, order_id, body.status, body.note,
+                                              actor=principal.actor, role=principal.role), principal.role)
 
 
 @router.get("/products", dependencies=[Depends(require_owner)])

@@ -91,7 +91,8 @@ def checkout(db: Session, cart_id: str, name: str, email: str, address: str,
         for line in view["items"]:
             result = db.execute(
                 update(Product)
-                .where(Product.id == line["product_id"], Product.stock >= line["quantity"])
+                .where(Product.id == line["product_id"], Product.stock >= line["quantity"],
+                       Product.active.is_(True))
                 .values(stock=Product.stock - line["quantity"])
             )
             if result.rowcount != 1:

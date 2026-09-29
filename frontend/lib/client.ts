@@ -119,8 +119,11 @@ export function recalledOrderEmail(): string {
 }
 
 export async function getOrder(orderId: string, email: string): Promise<Order> {
-  const qs = new URLSearchParams({ email });
-  return api<Order>(`/api/orders/${encodeURIComponent(orderId)}?${qs}`);
+  // POST keeps the email out of URLs and server logs.
+  return api<Order>(`/api/orders/${encodeURIComponent(orderId)}/lookup`, {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
 }
 
 /**

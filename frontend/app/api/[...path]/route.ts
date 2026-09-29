@@ -8,7 +8,8 @@ import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const FORWARD_REQUEST_HEADERS = ["content-type", "stripe-signature", "accept"];
+// x-forwarded-for lets the backend rate-limit per visitor rather than per proxy.
+const FORWARD_REQUEST_HEADERS = ["content-type", "stripe-signature", "accept", "x-forwarded-for"];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;

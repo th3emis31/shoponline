@@ -14,7 +14,9 @@ from .admin_routes import router as admin_router
 from .models import Order, Product, WaitlistSignup
 from .security import require_owner
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
+from .ratelimit import limit
 from .services import analytics, payments, shop, unit_economics
+from .services import orders as orders_svc
 from .services.shop import ShopError
 
 @asynccontextmanager
@@ -26,7 +28,9 @@ async def lifespan(_: FastAPI):
     scheduler.stop()
 
 
-app = FastAPI(title="NOVAHAUS API", version="0.1.0", lifespan=lifespan)
+# In production the interactive API docs are hidden.
+_docs = {} if not settings.is_production else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="NOVAHAUS API", version="0.1.0", lifespan=lifespan, **_docs)
 app.include_router(admin_public_router)
 app.include_router(admin_router)
 
@@ -58,7 +62,7 @@ def product(product_id: str, db: Session = Depends(get_session)):
     return to_public(p)
 
 
-@app.post("/api/carts", response_model=CartOut, status_code=201)
+@app.post("/api/carts", response_model=CartOut, status_code=201, dependencies=[Depends(limit("carts", 120, 600))])
 def create_cart(db: Session = Depends(get_session)):
     return shop.cart_view(shop.create_cart(db))
 
@@ -81,6 +85,9 @@ def remove_item(cart_id: str, product_id: str, db: Session = Depends(get_session
 @app.post("/api/carts/{cart_id}/checkout", response_model=OrderOut, status_code=201)
 def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session)):
     if not payments.payments_enabled():
+        if settings.is_production:
+            # Fail closed: never "place" unpaid orders on a live shop.
+            raise ShopError("Checkout is temporarily unavailable. Please try again later.", 503)
         # Development mode: no payment provider configured, order is just placed.
         order = shop.checkout(db, cart_id, body.name, str(body.email), body.address)
         analytics.record(db, "purchase")
@@ -93,11 +100,15 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
     try:
         session_id, url = payments.create_checkout_session(order)
     except Exception as exc:
-        order.status = "cancelled"
-        payments.release_stock(db, order)
+        db.rollback()
+        if orders_svc.move(db, order.id, {"pending_payment"}, "cancelled"):
+            orders_svc.release_stock(db, order.id)
         db.commit()
         raise ShopError("Payment provider unavailable, please try again", 502) from exc
+    # Save the session first: if anything below fails, the automation can still
+    # find and settle this order.
     order.stripe_session_id = session_id
+    db.commit()
     db.delete(shop.get_cart(db, cart_id))
     db.commit()
     return {**shop.order_view(order), "checkout_url": url}
@@ -108,7 +119,7 @@ class EventIn(BaseModel):
     product_id: str | None = Field(default=None, max_length=64)
 
 
-@app.post("/api/events", status_code=204)
+@app.post("/api/events", status_code=204, dependencies=[Depends(limit("events", 300, 600))])
 def track_event(body: EventIn, db: Session = Depends(get_session)):
     # Unknown product IDs are dropped so the table can't be filled with junk.
     product_id = body.product_id if body.product_id and db.get(Product, body.product_id) else None
@@ -125,7 +136,7 @@ class WaitlistIn(BaseModel):
     consent: bool
 
 
-@app.post("/api/waitlist", status_code=201)
+@app.post("/api/waitlist", status_code=201, dependencies=[Depends(limit("waitlist", 10, 600))])
 def join_waitlist(body: WaitlistIn, db: Session = Depends(get_session)):
     # UK rules (PECR/UK GDPR): marketing email needs a clear, positive opt-in.
     if not body.consent:
@@ -153,13 +164,29 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_session)):
     return {"received": True, "outcome": payments.handle_event(db, event)}
 
 
-@app.get("/api/orders/{order_id}", response_model=OrderOut)
-def get_order(order_id: str, email: str, db: Session = Depends(get_session)):
+def _lookup(db: Session, order_id: str, email: str) -> dict:
     # Track order: requires order ID + email (Blueprint section H).
     order = db.get(Order, order_id)
     if order is None or order.customer_email.lower() != email.strip().lower():
         raise ShopError("Order not found", 404)
     return shop.order_view(order)
+
+
+class LookupIn(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+@app.post("/api/orders/{order_id}/lookup", response_model=OrderOut,
+          dependencies=[Depends(limit("lookup", 30, 600))])
+def lookup_order(order_id: str, body: LookupIn, db: Session = Depends(get_session)):
+    """Preferred: the email travels in the body, so it never lands in access logs."""
+    return _lookup(db, order_id, body.email)
+
+
+@app.get("/api/orders/{order_id}", response_model=OrderOut, dependencies=[Depends(limit("lookup", 30, 600))])
+def get_order(order_id: str, email: str, db: Session = Depends(get_session)):
+    """Older form (email in the URL); kept working for existing links."""
+    return _lookup(db, order_id, email)
 
 
 @app.get("/api/admin/products/{product_id}/economics", response_model=EconomicsOut,

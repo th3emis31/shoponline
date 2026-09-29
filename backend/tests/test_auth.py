@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.models import AdminAudit, AdminSession, AdminUser
+from app.config import settings
 from app.services import auth
 
 OWNER = ("owner@example.com", "correct horse battery")
@@ -86,7 +87,8 @@ def test_lockout_after_repeated_failures(client, users, db):
     for _ in range(auth.MAX_FAILED_ATTEMPTS):
         assert login(client, OWNER[0], "wrong password!!").status_code == 401
     r = login(client, *OWNER)  # right password, but locked
-    assert r.status_code == 401 and "Too many" in r.json()["detail"]
+    # Same generic message as a wrong password: never reveals that the account exists.
+    assert r.status_code == 401 and r.json() == login(client, "nobody@example.com", "x" * 12).json()
     with db() as s:  # lock expires
         u = s.query(AdminUser).filter_by(email=OWNER[0]).one()
         u.locked_until = datetime.now(timezone.utc) - timedelta(seconds=1)
@@ -128,9 +130,19 @@ def test_session_tokens_are_stored_hashed(client, users, db):
     assert stored != t and len(stored) == 64
 
 
-def test_shared_token_still_works_as_owner(client, admin_token, users):
-    r = client.get("/api/admin/me", headers=hdr(admin_token))
-    assert r.json() == {"actor": "admin-token", "role": "owner"}
+def test_shared_token_works_only_until_an_owner_account_exists(client, admin_token, db, monkeypatch):
+    assert client.get("/api/admin/me", headers=hdr(admin_token)).json() == {"actor": "admin-token", "role": "owner"}
+    with db() as s:
+        auth.create_user(s, *OWNER, "owner")
+    assert client.get("/api/admin/me", headers=hdr(admin_token)).status_code == 401
+    monkeypatch.setattr(settings, "admin_token_always", True)  # explicit opt-in keeps it
+    assert client.get("/api/admin/me", headers=hdr(admin_token)).status_code == 200
+
+
+def test_staff_account_does_not_disable_shared_token(client, admin_token, db):
+    with db() as s:
+        auth.create_user(s, *STAFF, "staff")
+    assert client.get("/api/admin/me", headers=hdr(admin_token)).status_code == 200
 
 
 def test_accounts_work_without_shared_token(client, users):

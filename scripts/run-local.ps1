@@ -134,17 +134,22 @@ $BePort = Resolve-ShopPort 8000 "backend"
 $FePort = Resolve-ShopPort 3000 "shop"
 $ShopUrl = "http://localhost:$FePort"
 $ApiUrl = "http://localhost:$BePort"
+# Internal connections use 127.0.0.1 directly (the servers listen only there, and
+# "localhost" may resolve to the IPv6 address first on Windows).
+$ShopLocal = "http://127.0.0.1:$FePort"
+$ApiLocal = "http://127.0.0.1:$BePort"
 
 Step "Starting backend ($ApiUrl) and shop ($ShopUrl)"
 # Child processes inherit these: the shop finds the backend, and links/redirects use the right port.
-$env:API_URL = $ApiUrl
+$env:API_URL = $ApiLocal
 $env:PUBLIC_BASE_URL = $ShopUrl
 $env:SITE_URL = $ShopUrl
 # --app-dir puts the shop folder in the process command line, which is how
 # stop-local recognises (and only stops) the shop's own processes.
-$uvicornArgs = @("-m", "uvicorn", "app.main:app", "--app-dir", "`"$Backend`"", "--port", "$BePort")
+$uvicornArgs = @("-m", "uvicorn", "app.main:app", "--app-dir", "`"$Backend`"", "--host", "127.0.0.1", "--port", "$BePort")
 $be = Start-Process -FilePath $VenvPy -ArgumentList $uvicornArgs -WorkingDirectory $Backend -PassThru
-$fe = Start-Process -FilePath $npm -ArgumentList @("run", "dev", "--", "-p", "$FePort") -WorkingDirectory $Frontend -PassThru
+# -H 127.0.0.1: the local shop is only reachable from this PC, not the whole network.
+$fe = Start-Process -FilePath $npm -ArgumentList @("run", "dev", "--", "-p", "$FePort", "-H", "127.0.0.1") -WorkingDirectory $Frontend -PassThru
 # Remember what we started, so stop-local.cmd stops exactly these (and their children).
 Set-Content -Path $PidFile -Value @($be.Id, $fe.Id) -Encoding ASCII
 Set-Content -Path $PortsFile -Value @("backend=$BePort", "frontend=$FePort") -Encoding ASCII
@@ -159,8 +164,8 @@ function Wait-Url($url, $seconds) {
   }
   return $false
 }
-if (-not (Wait-Url "$ApiUrl/api/health" 60)) { Fail "Backend did not start. Check its window for errors." }
-if (-not (Wait-Url "$ShopUrl/shop" 120)) { Fail "Shop did not start. Check its window for errors." }
+if (-not (Wait-Url "$ApiLocal/api/health" 60)) { Fail "Backend did not start. Check its window for errors." }
+if (-not (Wait-Url "$ShopLocal/shop" 120)) { Fail "Shop did not start. Check its window for errors." }
 
 Write-Host ""
 Write-Host "NOVAHAUS is running:" -ForegroundColor Green

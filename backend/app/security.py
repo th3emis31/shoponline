@@ -5,14 +5,20 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import get_session
-from .services.auth import Principal, any_users, principal_for_token
+from .services.auth import Principal, any_active_owner, any_users, principal_for_token
+
+
+def shared_token_allowed(db: Session) -> bool:
+    """The shared ADMIN_TOKEN is a setup/emergency key: it works only until a personal
+    owner account exists (or always, if ADMIN_TOKEN_ALWAYS=true)."""
+    return bool(settings.admin_token) and (settings.admin_token_always or not any_active_owner(db))
 
 
 def require_admin(x_admin_token: str = Header(default=""), db: Session = Depends(get_session)) -> Principal:
-    """Accepts a personal admin session token, or the shared ADMIN_TOKEN (owner, break-glass)."""
-    if settings.admin_token and x_admin_token and hmac.compare_digest(
+    """Accepts a personal admin session token, or the shared ADMIN_TOKEN (see shared_token_allowed)."""
+    if x_admin_token and settings.admin_token and hmac.compare_digest(
         x_admin_token.encode(), settings.admin_token.encode()
-    ):
+    ) and shared_token_allowed(db):
         return Principal(actor="admin-token", role="owner")
     principal = principal_for_token(db, x_admin_token)
     if principal:

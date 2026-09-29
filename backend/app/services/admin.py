@@ -7,8 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import AdminAudit, Order, Product
-from . import analytics, unit_economics
-from .payments import release_stock
+from . import analytics, orders, unit_economics
 from .shop import ShopError
 
 # Allowed manual status changes. Paid orders are never cancelled here:
@@ -21,7 +20,9 @@ TRANSITIONS: dict[str, set[str]] = {
     "shipped": set(),
     "cancelled": set(),
 }
-STOCK_HOLDING = {"placed", "pending_payment", "payment_review"}
+# Staff may only ship. Anything involving money (accepting a reviewed payment,
+# cancelling) needs the owner.
+STAFF_TRANSITIONS = {("placed", "shipped"), ("paid", "shipped")}
 
 
 def audit(db: Session, action: str, target: str, actor: str | None = None, **detail) -> None:
@@ -36,7 +37,7 @@ def list_orders(db: Session, status: str | None = None, limit: int = 100) -> lis
 
 
 def set_order_status(db: Session, order_id: str, new_status: str, note: str = "",
-                     actor: str | None = None) -> Order:
+                     actor: str | None = None, role: str = "owner") -> Order:
     order = db.get(Order, order_id)
     if order is None:
         raise ShopError("Order not found", 404)
@@ -44,18 +45,32 @@ def set_order_status(db: Session, order_id: str, new_status: str, note: str = ""
     if new_status not in TRANSITIONS.get(old, set()):
         allowed = ", ".join(sorted(TRANSITIONS.get(old, set()))) or "none"
         raise ShopError(f"Cannot change {old} to {new_status} (allowed: {allowed})", 409)
+    if role != "owner" and (old, new_status) not in STAFF_TRANSITIONS:
+        raise ShopError("Only the owner can do this", 403)
+    if old == "pending_payment" and new_status == "cancelled" and order.stripe_session_id:
+        # Close the Stripe checkout first so the customer can't pay a cancelled order.
+        from . import payments
+        if payments.payments_enabled():
+            try:
+                payments.expire_session(order.stripe_session_id)
+            except Exception as exc:
+                raise ShopError("Couldn't close the Stripe checkout (it may just have been paid). "
+                                "Wait a minute and check again.", 409) from exc
     try:
-        if new_status == "cancelled" and old in STOCK_HOLDING:
-            release_stock(db, order)
+        values = {"paid_at": datetime.now(timezone.utc)} if new_status == "paid" else {}
+        if not orders.move(db, order.id, {old}, new_status, **values):
+            raise ShopError("This order changed meanwhile. Reload and try again.", 409)
+        if new_status == "cancelled":
+            orders.release_stock(db, order.id)
         if new_status == "paid":
-            order.paid_at = datetime.now(timezone.utc)
+            orders.reserve_stock(db, order.id)  # accepted after review: take the items again
             analytics.record(db, "purchase", commit=False)
-        order.status = new_status
         audit(db, "order.status", order.id, actor=actor, old=old, new=new_status, note=note)
         db.commit()
     except Exception:
         db.rollback()
         raise
+    db.refresh(order)
     return order
 
 

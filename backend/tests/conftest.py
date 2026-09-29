@@ -10,6 +10,13 @@ from app.config import settings
 from app.db import Base, get_session
 from app.main import app
 from app.seed import seed
+from app import ratelimit
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    ratelimit.reset()
+    yield
 
 
 @pytest.fixture()

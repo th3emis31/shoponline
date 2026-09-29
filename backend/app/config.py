@@ -6,6 +6,8 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./novahaus.db"
     admin_token: str = ""
+    # By default the shared token stops working once a personal owner login exists.
+    admin_token_always: bool = False
     # Shipping in pence. ASSUMPTION until carrier rates are confirmed.
     shipping_fee: int = 395
     free_shipping_threshold: int = 5000
@@ -29,6 +31,19 @@ class Settings(BaseSettings):
     # Daily jobs, hour of day in UTC.
     backup_hour: int = 2
     report_hour: int = 6
+    # The automatic nightly backup keeps this many newest backups (0 = keep all).
+    # Manual backups (backup.cmd) never delete anything.
+    backup_keep: int = 60
+    # Carts nobody has touched for this many days are removed by the cleanup job.
+    cart_ttl_days: int = 30
+
+    # "production" turns on fail-safe behaviour: checkout refuses to run without
+    # Stripe, and the API docs pages are hidden.
+    environment: str = "development"
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() == "production"
 
 
 settings = Settings()

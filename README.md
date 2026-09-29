@@ -160,6 +160,37 @@ automation.cmd report              & REM latest daily report
 - A reorder creates a **purchase order** ("ready to send"). Marking it *received* adds the stock.
 - `AUTOMATION_ENABLED=false` turns the schedule off. The Run now buttons and `automation.cmd` still work.
 
+## Safety guarantees
+
+These came out of an independent review and are covered by regression tests (`backend/tests/test_review_fixes.py`).
+
+**Orders and stock**
+- Every order status change is a single "only if it's still X" database update, so a webhook, the automation and an admin click can't clash.
+- Stock is held or given back through a per-order flag, so it can never be released twice.
+- Accepting a reviewed late payment takes the stock again, or is refused if there isn't enough.
+- Receiving a purchase order adds stock with an atomic increment, so a sale at the same moment is never lost, and a double click can't add stock twice.
+- Deactivated products can't be checked out.
+
+**Approvals and automation**
+- A recommendation can be approved only once.
+- Each automation job runs one copy at a time, whether started by the scheduler, Run now, the CLI or several server processes.
+
+**Payments**
+- Unpaid checkouts still being processed by the bank are left alone.
+- Cancelling an unpaid order closes its Stripe checkout first.
+- If the server stops mid-checkout, the order is recovered later.
+- With `ENVIRONMENT=production`, checkout refuses to run without Stripe, and the API docs are hidden.
+
+**Sign-in and roles**
+- Staff can only ship orders. Accepting payments and cancelling are for the owner only.
+- Sign-in shows one generic message for every failure, and the failed-attempt counter is atomic.
+- Sign-in, the waitlist, carts, events and order lookup are rate-limited.
+- The shared `ADMIN_TOKEN` stops working once a personal owner login exists.
+
+**Local running**
+- The local shop listens only on this PC (127.0.0.1).
+- `stop-local` matches the exact shop folder.
+
 ## SEO (Blueprint weeks 7-8)
 
 - `/sitemap.xml` lists every page and product. `/robots.txt` points search engines to it.

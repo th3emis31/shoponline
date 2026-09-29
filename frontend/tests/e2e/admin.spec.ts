@@ -22,15 +22,14 @@ test("wrong password is rejected", async ({ page }) => {
   await expect(page.getByText("Invalid email or password")).toBeVisible();
 });
 
-test("shared admin token still works, wrong token is rejected", async ({ page }) => {
+test("shared admin token is switched off once an owner account exists", async ({ page }) => {
+  // The E2E backend has a personal owner account, so the shared token must no longer work.
   await page.goto("/admin");
   await page.getByRole("button", { name: /shared admin token/ }).click();
-  await page.getByLabel(/Shared admin token/).fill("wrong");
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByText("Invalid admin token")).toBeVisible();
   await page.getByLabel(/Shared admin token/).fill(TOKEN);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByTestId("whoami")).toContainText("admin-token · owner");
+  await expect(page.getByText("Invalid admin token")).toBeVisible();
+  await expect(page.getByTestId("whoami")).toHaveCount(0);
 });
 
 test("staff only see orders; sign out ends the session", async ({ page }) => {

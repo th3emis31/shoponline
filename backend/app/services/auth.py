@@ -11,7 +11,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from ..models import AdminSession, AdminUser
@@ -113,31 +113,36 @@ def _token_hash(token: str) -> str:
 
 
 def login(db: Session, email: str, password: str) -> tuple[str, AdminUser, datetime]:
-    """Returns (token, user, expires_at). Raises AuthError with a generic message."""
-    generic = AuthError("Invalid email or password")
+    """Returns (token, user, expires_at). Raises AuthError with ONE generic message for
+    every failure (unknown email, wrong password, locked, disabled), so sign-in never
+    reveals which admin emails exist."""
+    generic = AuthError("Invalid email or password. After 5 wrong attempts, wait 15 minutes.")
     user = db.scalar(select(AdminUser).where(AdminUser.email == normalise_email(email)))
-    if user is None or not user.active:
-        verify_password(password, _DUMMY_HASH)
-        raise generic
     now = _now()
+    if user is None or not user.active:
+        verify_password(password, _DUMMY_HASH)  # same work, same timing
+        raise generic
     locked_until = _aware(user.locked_until)
     if locked_until and locked_until > now:
-        raise AuthError("Too many failed attempts. Try again in 15 minutes.")
+        verify_password(password, _DUMMY_HASH)
+        raise generic
     if not verify_password(password, user.password_hash):
-        user.failed_attempts += 1
-        if user.failed_attempts >= MAX_FAILED_ATTEMPTS:
-            user.locked_until = now + LOCKOUT
-            user.failed_attempts = 0
+        # Atomic count: parallel guesses can't slip past the limit.
+        db.execute(update(AdminUser).where(AdminUser.id == user.id)
+                   .values(failed_attempts=AdminUser.failed_attempts + 1))
+        db.execute(update(AdminUser)
+                   .where(AdminUser.id == user.id, AdminUser.failed_attempts >= MAX_FAILED_ATTEMPTS)
+                   .values(locked_until=now + LOCKOUT, failed_attempts=0))
         db.commit()
         raise generic
-    user.failed_attempts = 0
-    user.locked_until = None
+    db.execute(update(AdminUser).where(AdminUser.id == user.id).values(failed_attempts=0, locked_until=None))
     token = secrets.token_urlsafe(32)
     expires = now + SESSION_LIFETIME
     db.add(AdminSession(token_hash=_token_hash(token), user_id=user.id, expires_at=expires))
     # Housekeeping: drop this user's expired sessions.
     db.execute(delete(AdminSession).where(AdminSession.user_id == user.id, AdminSession.expires_at < now))
     db.commit()
+    db.refresh(user)
     return token, user, expires
 
 
@@ -157,3 +162,7 @@ def logout(db: Session, token: str) -> None:
 
 def any_users(db: Session) -> bool:
     return db.scalar(select(AdminUser.id).limit(1)) is not None
+
+
+def any_active_owner(db: Session) -> bool:
+    return db.scalar(select(AdminUser.id).where(AdminUser.role == "owner", AdminUser.active.is_(True)).limit(1)) is not None

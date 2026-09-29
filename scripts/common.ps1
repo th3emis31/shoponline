@@ -40,7 +40,9 @@ function Get-ParentId([int]$procId) {
 function Test-FromShopFolder([string]$cmd) {
   if (-not $cmd) { return $false }
   $c = $cmd.ToLower().Replace("\", "/")
-  return $c.Contains($ShopRoot.ToLower().Replace("\", "/"))
+  # Match the folder followed by a separator, so "shoponline-old" or "shoponline2" never match.
+  $root = $ShopRoot.ToLower().Replace("\", "/").TrimEnd("/") + "/"
+  return $c.Contains($root)
 }
 
 # Highest process in the parent chain that was started from the shop folder

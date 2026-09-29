@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -71,6 +71,9 @@ class Order(Base):
     shipping: Mapped[int] = mapped_column(Integer)
     total: Mapped[int] = mapped_column(Integer)
     stripe_session_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    # True while this order's items are deducted from stock. Flipped with a
+    # conditional UPDATE so stock can never be released (or reserved) twice.
+    stock_reserved: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"))
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     items: Mapped[list["OrderItem"]] = relationship(
@@ -226,3 +229,14 @@ class WaitlistSignup(Base):
     product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     consent_text: Mapped[str] = mapped_column(Text)  # exactly what the person agreed to
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class JobLease(Base):
+    """Only one runner at a time per automation job (scheduler thread, Run now, CLI,
+    or several server processes)."""
+
+    __tablename__ = "job_leases"
+
+    job: Mapped[str] = mapped_column(String(64), primary_key=True)
+    holder: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

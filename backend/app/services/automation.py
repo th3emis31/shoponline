@@ -14,13 +14,15 @@ Policy ("automatic within limits", NOVAHAUS Blueprint section J):
 
 import json
 import math
+import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import (AnalyticsEvent, AutomationRun, DailyReport, Order, OrderItem, Product,
+from ..models import (AnalyticsEvent, AutomationRun, Cart, CartItem, DailyReport, JobLease, Order, Product,
                       PurchaseOrder, Recommendation)
 from . import payments, unit_economics
 from .admin import audit
@@ -125,12 +127,21 @@ def decide(db: Session, rec_id: int, approve: bool, actor: str, note: str = "") 
     rec = db.get(Recommendation, rec_id)
     if rec is None:
         raise ShopError("Recommendation not found", 404)
-    if rec.status != "pending":
+    now = _now()
+    new_status = "approved" if approve else "rejected"
+    # Claim it atomically: of two simultaneous clicks, only one can win.
+    claimed = db.execute(
+        update(Recommendation)
+        .where(Recommendation.id == rec_id, Recommendation.status == "pending")
+        .values(status=new_status, decided_by=actor, decided_at=now,
+                decision_note=note or new_status)
+        .execution_options(synchronize_session="fetch")
+    ).rowcount == 1
+    if not claimed:
+        db.rollback()
+        db.refresh(rec)
         raise ShopError(f"Already {rec.status}", 409)
-    rec.decided_by, rec.decided_at = actor, _now()
-    rec.decision_note = note or ("approved" if approve else "rejected")
     if not approve:
-        rec.status = "rejected"
         audit(db, "recommendation.reject", str(rec.id), actor=actor, note=note)
         db.commit()
         return rec
@@ -140,7 +151,7 @@ def decide(db: Session, rec_id: int, approve: bool, actor: str, note: str = "") 
         audit(db, "recommendation.approve", str(rec.id), actor=actor, note=note)
         db.commit()
     except ShopError:
-        db.rollback()
+        db.rollback()  # also undoes the claim: it stays pending
         raise
     return rec
 
@@ -154,15 +165,25 @@ def set_po_status(db: Session, po_id: int, status: str, actor: str) -> PurchaseO
     po = db.get(PurchaseOrder, po_id)
     if po is None:
         raise ShopError("Purchase order not found", 404)
-    if status not in PO_TRANSITIONS.get(po.status, set()):
-        raise ShopError(f"Cannot change {po.status} to {status}", 409)
     old = po.status
-    po.status, po.updated_at = status, _now()
+    if status not in PO_TRANSITIONS.get(old, set()):
+        raise ShopError(f"Cannot change {old} to {status}", 409)
+    moved = db.execute(
+        update(PurchaseOrder)
+        .where(PurchaseOrder.id == po_id, PurchaseOrder.status == old)
+        .values(status=status, updated_at=_now())
+        .execution_options(synchronize_session="fetch")
+    ).rowcount == 1
+    if not moved:  # e.g. a double click: the first one already changed it
+        db.rollback()
+        raise ShopError("This purchase order changed meanwhile. Reload and try again.", 409)
     if status == "received":
-        product = db.get(Product, po.product_id)
-        product.stock += po.quantity
+        # SQL-side increment: never loses a sale that happens at the same moment.
+        db.execute(update(Product).where(Product.id == po.product_id)
+                   .values(stock=Product.stock + po.quantity))
     audit(db, "purchase_order.status", str(po.id), actor=actor, old=old, new=status)
     db.commit()
+    db.refresh(po)
     return po
 
 
@@ -252,7 +273,21 @@ def job_backup(db: Session) -> str:
     from .. import backup  # local import: backup imports settings at module load
     path = backup.create_backup()
     counts = backup.verify_backup(path)
-    return f"saved and verified {path.name} {counts}"
+    note = ""
+    if settings.backup_keep > 0:
+        removed = backup.prune(settings.backup_keep)
+        note = f"; kept newest {settings.backup_keep}, removed {len(removed)} older" if removed else ""
+    return f"saved and verified {path.name} {counts}{note}"
+
+
+def job_cleanup(db: Session) -> str:
+    """Remove carts nobody has touched for cart_ttl_days (they hold no stock)."""
+    cutoff = _now() - timedelta(days=settings.cart_ttl_days)
+    old = select(Cart.id).where(Cart.created_at < cutoff)
+    db.execute(delete(CartItem).where(CartItem.cart_id.in_(old)))  # explicit: SQLite doesn't cascade
+    n = db.execute(delete(Cart).where(Cart.created_at < cutoff)).rowcount
+    db.commit()
+    return f"removed {n} old cart(s)"
 
 
 def build_report(db: Session, day: datetime) -> str:
@@ -316,7 +351,32 @@ JOBS = {
     "margin_guard": (job_margin_guard, "every", 360),
     "backup": (job_backup, "daily", lambda: settings.backup_hour),
     "daily_report": (job_daily_report, "daily", lambda: settings.report_hour),
+    "cleanup": (job_cleanup, "daily", lambda: 3),
 }
+
+LEASE = timedelta(minutes=30)
+
+
+def _acquire(db: Session, job: str, holder: str) -> bool:
+    """Take the job's lease; False if another runner holds a live one."""
+    now = _now()
+    taken = db.execute(update(JobLease).where(JobLease.job == job, JobLease.expires_at < now)
+                       .values(holder=holder, expires_at=now + LEASE)).rowcount == 1
+    if taken:
+        db.commit()
+        return True
+    try:
+        db.add(JobLease(job=job, holder=holder, expires_at=now + LEASE))
+        db.commit()
+        return True
+    except IntegrityError:
+        db.rollback()
+        return False
+
+
+def _release(db: Session, job: str, holder: str) -> None:
+    db.execute(delete(JobLease).where(JobLease.job == job, JobLease.holder == holder))
+    db.commit()
 
 
 def _last_run(db: Session, job: str) -> AutomationRun | None:
@@ -336,6 +396,13 @@ def is_due(db: Session, job: str, now: datetime) -> bool:
 
 def run_job(db: Session, job: str) -> AutomationRun:
     fn = JOBS[job][0]
+    holder = uuid.uuid4().hex
+    if not _acquire(db, job, holder):
+        run = AutomationRun(job=job, started_at=_now(), finished_at=_now(), status="skipped",
+                            message="skipped: already running elsewhere")
+        db.add(run)
+        db.commit()
+        return run
     run = AutomationRun(job=job, started_at=_now())
     db.add(run)
     db.commit()
@@ -350,6 +417,10 @@ def run_job(db: Session, job: str) -> AutomationRun:
         run.message = f"{type(exc).__name__}: {exc}"
     run.finished_at = _now()
     db.commit()
+    try:
+        _release(db, job, holder)
+    except Exception:
+        db.rollback()  # the lease simply expires
     return run
 
 
