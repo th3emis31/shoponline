@@ -26,7 +26,8 @@ A small, dependency-free online shop for **NOVAHAUS**, calm small-space organisa
    admin-user.cmd create you@example.com --role owner
    ```
    Then sign in at http://localhost:3000/admin with that email and password. Use `--role staff` for helpers: staff can only manage orders, and can't see costs, prices, the funnel or the audit log.
-5. To stop, run `stop-local.cmd` (or close the server windows). To start again, run `run-local.cmd`. It's safe to re-run and never deletes your data, and it tells you if the shop is already running.
+5. To stop, run `stop-local.cmd`. It stops **only the shop**: only programs started from the `shoponline` folder. Other programs on your PC are never touched. To start again, run `run-local.cmd`. It's safe to re-run, never deletes your data, and tells you if the shop is already running.
+   If another program already uses port 8000 or 3000, the shop leaves it alone and moves to the next free port. It prints the address to use, for example http://localhost:3001.
 
 ### Backups
 

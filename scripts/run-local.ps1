@@ -103,25 +103,51 @@ if ($SetupOnly) {
 }
 
 # ---------- 4. Start ----------
-function Test-PortInUse($port) {
-  $client = New-Object System.Net.Sockets.TcpClient
-  try {
-    $task = $client.ConnectAsync("127.0.0.1", $port)
-    return ($task.Wait(1000) -and $client.Connected)
-  } catch { return $false } finally { $client.Close() }
+. (Join-Path $PSScriptRoot "common.ps1")
+
+# Use the usual ports; if another program already uses one, leave that program
+# alone and move the shop to the next free port.
+function Resolve-ShopPort([int]$preferred, [string]$label) {
+  $skipped = @()
+  for ($p = $preferred; $p -le $preferred + 50; $p++) {
+    if (-not (Test-PortInUse $p)) {
+      if ($skipped.Count -gt 0) {
+        Write-Host "Port(s) $($skipped -join '; ') in use by other programs (not the shop) - leaving them alone. The $label will use port $p." -ForegroundColor Yellow
+      }
+      return $p
+    }
+    $owners = @(Get-PortOwners $p)
+    foreach ($o in $owners) {
+      if ((Get-ShopAnchor $o) -gt 0) {
+        Fail ("The shop is already running (port $p).`n" +
+              "Run stop-local.cmd first, then run-local.cmd again.`n" +
+              "(Setup and database updates above were applied; only the start was skipped.)")
+      }
+    }
+    $who = ($owners | ForEach-Object { "$(Get-ProcName $_) PID $_" }) -join ", "
+    if (-not $who) { $who = "another program" }
+    $skipped += "$p ($who)"
+  }
+  Fail "No free port found near $preferred for the $label."
 }
-$busy = @(8000, 3000 | Where-Object { Test-PortInUse $_ })
-if ($busy.Count -gt 0) {
-  Fail ("The shop (or another program) is already running on port(s) $($busy -join ', ').`n" +
-        "Run stop-local.cmd (or close the NOVAHAUS server windows), then run run-local.cmd again.`n" +
-        "(Setup and database updates above were applied; only the start was skipped.)")
-}
-Step "Starting backend (http://localhost:8000) and shop (http://localhost:3000)"
-$uvicornArgs = @("-m", "uvicorn", "app.main:app", "--reload", "--port", "8000")
+$BePort = Resolve-ShopPort 8000 "backend"
+$FePort = Resolve-ShopPort 3000 "shop"
+$ShopUrl = "http://localhost:$FePort"
+$ApiUrl = "http://localhost:$BePort"
+
+Step "Starting backend ($ApiUrl) and shop ($ShopUrl)"
+# Child processes inherit these: the shop finds the backend, and links/redirects use the right port.
+$env:API_URL = $ApiUrl
+$env:PUBLIC_BASE_URL = $ShopUrl
+$env:SITE_URL = $ShopUrl
+# --app-dir puts the shop folder in the process command line, which is how
+# stop-local recognises (and only stops) the shop's own processes.
+$uvicornArgs = @("-m", "uvicorn", "app.main:app", "--app-dir", "`"$Backend`"", "--port", "$BePort")
 $be = Start-Process -FilePath $VenvPy -ArgumentList $uvicornArgs -WorkingDirectory $Backend -PassThru
-$fe = Start-Process -FilePath $npm -ArgumentList @("run", "dev") -WorkingDirectory $Frontend -PassThru
+$fe = Start-Process -FilePath $npm -ArgumentList @("run", "dev", "--", "-p", "$FePort") -WorkingDirectory $Frontend -PassThru
 # Remember what we started, so stop-local.cmd stops exactly these (and their children).
-Set-Content -Path (Join-Path $Root ".run-local.pids") -Value @($be.Id, $fe.Id) -Encoding ASCII
+Set-Content -Path $PidFile -Value @($be.Id, $fe.Id) -Encoding ASCII
+Set-Content -Path $PortsFile -Value @("backend=$BePort", "frontend=$FePort") -Encoding ASCII
 
 function Wait-Url($url, $seconds) {
   $deadline = (Get-Date).AddSeconds($seconds)
@@ -133,20 +159,20 @@ function Wait-Url($url, $seconds) {
   }
   return $false
 }
-if (-not (Wait-Url "http://localhost:8000/api/health" 60)) { Fail "Backend did not start. Check its window for errors." }
-if (-not (Wait-Url "http://localhost:3000/shop" 120)) { Fail "Shop did not start. Check its window for errors." }
+if (-not (Wait-Url "$ApiUrl/api/health" 60)) { Fail "Backend did not start. Check its window for errors." }
+if (-not (Wait-Url "$ShopUrl/shop" 120)) { Fail "Shop did not start. Check its window for errors." }
 
 Write-Host ""
 Write-Host "NOVAHAUS is running:" -ForegroundColor Green
-Write-Host "  Shop:      http://localhost:3000"
-Write-Host "  Admin:     http://localhost:3000/admin"
+Write-Host "  Shop:      $ShopUrl"
+Write-Host "  Admin:     $ShopUrl/admin"
 if ($NeedsAdmin) {
   Write-Host ""
   Write-Host "  Create your personal owner login (recommended), in this folder:" -ForegroundColor Yellow
   Write-Host "    admin-user.cmd create you@example.com --role owner"
   Write-Host "  Until then you can sign in with the shared token: $adminToken"
 }
-Write-Host "  API docs:  http://localhost:8000/docs"
+Write-Host "  API docs:  $ApiUrl/docs"
 Write-Host ""
-Write-Host "To stop: run stop-local.cmd (or close the two server windows)."
-if (-not $NoBrowser -and $IsWin) { Start-Process "http://localhost:3000" }
+Write-Host "To stop: run stop-local.cmd (stops only the shop)."
+if (-not $NoBrowser -and $IsWin) { Start-Process $ShopUrl }
