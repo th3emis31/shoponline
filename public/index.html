@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NOVAHAUS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><h1>NOVAHAUS</h1><small>Less clutter, better space.</small><span id="cart-count">Cart: 0</span></header>
+  <main>
+    <section id="products" class="grid"></section>
+    <aside>
+      <h2>Your cart</h2>
+      <ul id="cart-items"></ul>
+      <p><strong>Total (inc. VAT): <span id="cart-total">£0.00</span></strong></p>
+      <form id="checkout-form">
+        <input name="name" placeholder="Full name" required>
+        <input name="email" type="email" placeholder="Email" required>
+        <input name="address" placeholder="Shipping address" required>
+        <button type="submit">Checkout</button>
+      </form>
+      <p id="message" role="status"></p>
+    </aside>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
