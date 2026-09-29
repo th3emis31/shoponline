@@ -113,13 +113,15 @@ function Test-PortInUse($port) {
 $busy = @(8000, 3000 | Where-Object { Test-PortInUse $_ })
 if ($busy.Count -gt 0) {
   Fail ("The shop (or another program) is already running on port(s) $($busy -join ', ').`n" +
-        "Close the NOVAHAUS server windows first, then run run-local.cmd again.`n" +
+        "Run stop-local.cmd (or close the NOVAHAUS server windows), then run run-local.cmd again.`n" +
         "(Setup and database updates above were applied; only the start was skipped.)")
 }
 Step "Starting backend (http://localhost:8000) and shop (http://localhost:3000)"
 $uvicornArgs = @("-m", "uvicorn", "app.main:app", "--reload", "--port", "8000")
 $be = Start-Process -FilePath $VenvPy -ArgumentList $uvicornArgs -WorkingDirectory $Backend -PassThru
 $fe = Start-Process -FilePath $npm -ArgumentList @("run", "dev") -WorkingDirectory $Frontend -PassThru
+# Remember what we started, so stop-local.cmd stops exactly these (and their children).
+Set-Content -Path (Join-Path $Root ".run-local.pids") -Value @($be.Id, $fe.Id) -Encoding ASCII
 
 function Wait-Url($url, $seconds) {
   $deadline = (Get-Date).AddSeconds($seconds)
@@ -146,5 +148,5 @@ if ($NeedsAdmin) {
 }
 Write-Host "  API docs:  http://localhost:8000/docs"
 Write-Host ""
-Write-Host "To stop: close the two server windows."
+Write-Host "To stop: run stop-local.cmd (or close the two server windows)."
 if (-not $NoBrowser -and $IsWin) { Start-Process "http://localhost:3000" }

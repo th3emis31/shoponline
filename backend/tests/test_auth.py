@@ -167,3 +167,12 @@ def test_cli_password_prompt_retries(monkeypatch, capsys):
     monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(answers2))
     with pytest.raises(SystemExit, match="Nothing was changed"):
         cli._ask_password()
+
+
+def test_cli_rejects_bad_email_before_asking_password(db, monkeypatch):
+    import app.admin_users as cli
+    monkeypatch.setattr(cli, "SessionLocal", db)
+    monkeypatch.setattr(cli, "inspect", lambda _e: type("I", (), {"has_table": lambda self, n: True})())
+    monkeypatch.setattr(cli, "_ask_password", lambda: pytest.fail("password must not be asked"))
+    with pytest.raises(SystemExit, match="not an email address"):
+        cli.main(["create", "YOUR-REAL-EMAIL", "--role", "owner"])

@@ -59,6 +59,10 @@ def main(argv: list[str] | None = None) -> int:
     with SessionLocal() as db:
         try:
             if args.cmd == "create":
+                # Check the email before asking for a password, so a typo doesn't waste the prompt.
+                if "@" not in args.email or "." not in args.email.split("@")[-1]:
+                    sys.exit(f"Error: '{args.email}' is not an email address. Example: "
+                             "admin-user.cmd create name@yourdomain.com --role owner")
                 user = auth.create_user(db, args.email, _ask_password(), args.role)
                 print(f"Created {user.role} {user.email}")
             elif args.cmd == "list":

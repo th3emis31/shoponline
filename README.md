@@ -26,7 +26,7 @@ A small, dependency-free online shop for **NOVAHAUS**, calm small-space organisa
    admin-user.cmd create you@example.com --role owner
    ```
    Then sign in at http://localhost:3000/admin with that email and password. Use `--role staff` for helpers: staff can only manage orders, and can't see costs, prices, the funnel or the audit log.
-5. To stop, close the two server windows. To start again, run `run-local.cmd` again. It's safe to re-run and never deletes your data.
+5. To stop, run `stop-local.cmd` (or close the server windows). To start again, run `run-local.cmd`. It's safe to re-run and never deletes your data, and it tells you if the shop is already running.
 
 ### Backups
 
