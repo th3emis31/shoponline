@@ -8,7 +8,7 @@ from .config import settings
 from .db import get_session
 from .models import Order, Product
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
-from .services import shop, unit_economics
+from .services import payments, shop, unit_economics
 from .services.shop import ShopError
 
 app = FastAPI(title="NOVAHAUS API", version="0.1.0")
@@ -71,8 +71,28 @@ def remove_item(cart_id: str, product_id: str, db: Session = Depends(get_session
 
 @app.post("/api/carts/{cart_id}/checkout", response_model=OrderOut, status_code=201)
 def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session)):
-    order = shop.checkout(db, cart_id, body.name, str(body.email), body.address)
-    return shop.order_view(order)
+    if not payments.payments_enabled():
+        # Development mode: no payment provider configured, order is just placed.
+        return shop.order_view(shop.checkout(db, cart_id, body.name, str(body.email), body.address))
+
+    # Stock is reserved now and released if payment fails or the session expires.
+    order = shop.checkout(db, cart_id, body.name, str(body.email), body.address, status="pending_payment")
+    try:
+        session_id, url = payments.create_checkout_session(order)
+    except Exception as exc:
+        order.status = "cancelled"
+        payments.release_stock(db, order)
+        db.commit()
+        raise ShopError("Payment provider unavailable, please try again", 502) from exc
+    order.stripe_session_id = session_id
+    db.commit()
+    return {**shop.order_view(order), "checkout_url": url}
+
+
+@app.post("/api/webhooks/stripe")
+async def stripe_webhook(request: Request, db: Session = Depends(get_session)):
+    event = payments.verify_event(await request.body(), request.headers.get("stripe-signature"))
+    return {"received": True, "outcome": payments.handle_event(db, event)}
 
 
 @app.get("/api/orders/{order_id}", response_model=OrderOut)

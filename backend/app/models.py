@@ -59,6 +59,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    # placed (no payments configured) | pending_payment | paid | cancelled | payment_review
     status: Mapped[str] = mapped_column(String(20), default="placed")
     customer_name: Mapped[str] = mapped_column(String(200))
     customer_email: Mapped[str] = mapped_column(String(320), index=True)
@@ -66,6 +67,8 @@ class Order(Base):
     subtotal: Mapped[int] = mapped_column(Integer)
     shipping: Mapped[int] = mapped_column(Integer)
     total: Mapped[int] = mapped_column(Integer)
+    stripe_session_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan", order_by="OrderItem.id"
@@ -83,3 +86,13 @@ class OrderItem(Base):
     unit_price: Mapped[int] = mapped_column(Integer)
     quantity: Mapped[int] = mapped_column(Integer)
     order: Mapped[Order] = relationship(back_populates="items")
+
+
+class StripeEvent(Base):
+    """Processed webhook event IDs, so a re-delivered event is applied once."""
+
+    __tablename__ = "stripe_events"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    type: Mapped[str] = mapped_column(String(100))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

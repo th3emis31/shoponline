@@ -5,9 +5,12 @@ quotes arrive. Stock values are placeholders. Safe to re-run: existing
 products are left untouched.
 """
 
+import sys
+
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
-from .db import Base, SessionLocal, engine
+from .db import SessionLocal, engine
 from .models import Product
 
 PRODUCTS = [
@@ -35,6 +38,8 @@ def seed(db: Session) -> int:
 
 
 if __name__ == "__main__":
-    Base.metadata.create_all(engine)
+    # Schema is owned by Alembic migrations; never create tables behind its back.
+    if not inspect(engine).has_table("products"):
+        sys.exit("Database has no tables yet. Run `alembic upgrade head` first.")
     with SessionLocal() as session:
         print(f"Seeded {seed(session)} new product(s).")

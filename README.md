@@ -42,12 +42,25 @@ The `backend/` folder holds the production-track API. It has the same shop featu
 - Admin endpoint `GET /api/admin/products/{id}/economics?cac=` returns the live break-even ROAS. It is protected by `X-Admin-Token`, and it stays disabled until you set `ADMIN_TOKEN`
 - Internal cost fields never appear in the public API
 
+### Payments (Stripe hosted Checkout)
+- With no `STRIPE_SECRET_KEY` set, checkout places the order without payment. This mode is for development only.
+- With a **test** key set, checkout reserves the stock, creates the order as `pending_payment`, and returns a `checkout_url` for Stripe's hosted payment page. Card data never touches our server.
+- `POST /api/webhooks/stripe` rejects any request without a valid signature, and it stays disabled until `STRIPE_WEBHOOK_SECRET` is set. Each event is applied only once.
+  - A paid order becomes `paid` only if the amount and currency match the order exactly. Otherwise it goes to `payment_review` for a human to check.
+  - An expired or failed payment releases the reserved stock. A late event never cancels an order that is already paid.
+- If Stripe is down, the order is cancelled and the stock released straight away.
+- To test locally: `stripe listen --forward-to localhost:8000/api/webhooks/stripe`, then use card `4242 4242 4242 4242`.
+
+### Database changes
+Alembic owns the schema. After you change `app/models.py`, run `alembic revision --autogenerate -m "..."`, review the file it generates, then run `alembic upgrade head`. A test fails if the models and the migrations ever drift apart.
+
 ```bash
 cd backend
 python -m venv .venv && .venv\Scripts\activate      # Windows (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 copy .env.example .env                                 # then edit DATABASE_URL / ADMIN_TOKEN
-python -m app.seed                                     # creates tables and adds the 5 products
+alembic upgrade head                                   # creates/updates the database tables
+python -m app.seed                                     # adds the 5 products (safe to re-run)
 uvicorn app.main:app --reload                          # http://localhost:8000/docs
 python -m pytest -q                                    # tests (set TEST_DATABASE_URL to run them on PostgreSQL)
 ```
@@ -56,7 +69,5 @@ CI (`.github/workflows/ci.yml`) runs the Node tests and the backend tests on SQL
 
 ## Next steps (pending blueprint approval)
 - Pick the stack: Blueprint section K recommends FastAPI + PostgreSQL + Next.js; Shopify is the faster alternative
-- Stripe hosted checkout with verified webhooks
-- Alembic migrations (tables are created by `app.seed` for now)
 - Next.js storefront on top of the backend API
 - Launch pages: About, Contact, FAQ, Shipping, Returns, Legal

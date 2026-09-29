@@ -57,6 +57,7 @@ class OrderOut(BaseModel):
     shipping: int
     total: int
     created_at: datetime
+    checkout_url: str | None = None
 
 
 class EconomicsOut(BaseModel):

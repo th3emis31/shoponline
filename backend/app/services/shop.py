@@ -79,7 +79,8 @@ def remove_item(db: Session, cart_id: str, product_id: str) -> Cart:
     return cart
 
 
-def checkout(db: Session, cart_id: str, name: str, email: str, address: str) -> Order:
+def checkout(db: Session, cart_id: str, name: str, email: str, address: str,
+             status: str = "placed") -> Order:
     cart = get_cart(db, cart_id)
     view = cart_view(cart)
     if not view["items"]:
@@ -97,7 +98,7 @@ def checkout(db: Session, cart_id: str, name: str, email: str, address: str) -> 
                 raise ShopError(f"Not enough stock for {line['name']}", 409)
 
         order = Order(
-            customer_name=name, customer_email=email, shipping_address=address,
+            status=status, customer_name=name, customer_email=email, shipping_address=address,
             subtotal=view["subtotal"], shipping=view["shipping"], total=view["total"],
             items=[OrderItem(product_id=l["product_id"], name=l["name"],
                              unit_price=l["unit_price"], quantity=l["quantity"])
