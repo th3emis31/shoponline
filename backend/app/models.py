@@ -363,3 +363,35 @@ class AdSpend(Base):
     note: Mapped[str] = mapped_column(String(200), default="")
     created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class SupportTicket(Base):
+    """A customer message from the contact form (Blueprint section O: support inbox, 1-business-day target)."""
+
+    __tablename__ = "support_tickets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    order_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    topic: Mapped[str] = mapped_column(String(20))  # order | return | product | other
+    message: Mapped[str] = mapped_column(Text)
+    # open | replied | closed
+    status: Mapped[str] = mapped_column(String(10), default="open", index=True)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    first_reply_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    replies: Mapped[list["SupportReply"]] = relationship(
+        back_populates="ticket", cascade="all, delete-orphan", order_by="SupportReply.id"
+    )
+
+
+class SupportReply(Base):
+    __tablename__ = "support_replies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("support_tickets.id", ondelete="CASCADE"), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    ticket: Mapped[SupportTicket] = relationship(back_populates="replies")

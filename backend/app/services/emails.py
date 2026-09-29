@@ -128,6 +128,8 @@ def render(flow: str, step: int, ctx: dict) -> tuple[str, str]:
     o = ctx.get("order")
     name = (o.customer_name.split(" ")[0] if o else "") or "there"
     shop = settings.public_base_url
+    t = ctx.get("ticket")
+    tname = (t.name.split(" ")[0] if t and t.name.strip() else "") or "there"
     T = {
         ("order", 1): (f"Your NOVAHAUS order {o.id[:8] if o else ''}",
                        f"Hi {name},\n\nThanks for your order. Here's what you bought:\n\n{_lines(o) if o else ''}\n\n"
@@ -183,6 +185,10 @@ def render(flow: str, step: int, ctx: dict) -> tuple[str, str]:
         ("winback", 1): ("It's been a while",
                          f"Hi {name},\n\nThanks for being a customer. If your setup needs a refresh, "
                          f"here's what's new: {shop}/shop"),
+        ("support", 1): (f"We've got your message (ref #{t.id if t else ''})",
+                         f"Hi {tname},\n\nThanks for getting in touch. A person will reply within 1 business day.\n\n"
+                         f"Your message:\n{t.message if t else ''}"),
+        ("support", 2): (f"Re: your message to NOVAHAUS (ref #{t.id if t else ''})", str(ctx.get("reply", ""))),
         ("launch", 1): ("NOVAHAUS is open",
                         f"Hi,\n\nYou asked us to tell you when NOVAHAUS opens. It's open now: {shop}\n\n"
                         "This is the one email you signed up for."),
@@ -208,6 +214,8 @@ FLOWS = {
     ("welcome", 5): ("marketing", timedelta(days=10)),
     ("winback", 1): ("marketing", timedelta(0)),
     ("launch", 1): ("marketing", timedelta(0)),
+    ("support", 1): ("transactional", timedelta(0)),
+    ("support", 2): ("transactional", timedelta(0)),
 }
 
 

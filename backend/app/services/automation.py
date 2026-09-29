@@ -326,6 +326,9 @@ def build_report(db: Session, day: datetime) -> str:
                                                     AutomationRun.started_at >= start)).all()
     views = events.get("view_product", 0)
     conv = f"{len(orders) / views:.1%}" if views else "n/a"
+    from ..models import SupportTicket
+    from .support import overdue_count
+    open_msgs = db.scalar(select(func.count()).select_from(SupportTicket).where(SupportTicket.status == "open"))
     lines = [
         f"# NOVAHAUS daily report: {start:%Y-%m-%d} (UTC)",
         "",
@@ -341,6 +344,7 @@ def build_report(db: Session, day: datetime) -> str:
         f"- Orders to ship: {to_ship}",
         f"- Supplier orders to place (dropship): {to_buy}",
         f"- Payments to review: {review}",
+        f"- Customer messages waiting: {open_msgs} (past the 1-business-day target: {overdue_count(db)})",
         f"- Approvals waiting: {pending}",
         f"- Low stock: {', '.join(f'{p.name} ({p.stock})' for p in low) or 'none'}",
         f"- Automation errors: {len(errors)}" + (f" ({'; '.join(e.job for e in errors)})" if errors else ""),

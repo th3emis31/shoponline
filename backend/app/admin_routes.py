@@ -464,3 +464,50 @@ def add_spend(body: SpendIn, db: Session = Depends(get_session), principal: Prin
     admin.audit(db, "campaign.spend", row.campaign, actor=principal.actor, day=body.day, spend=body.spend)
     db.commit()
     return {"id": row.id, "campaign": row.campaign}
+
+
+# ---------------------------------------------------------------- support inbox (owner and staff)
+
+@router.get("/support")
+def support_inbox(status: str | None = None, db: Session = Depends(get_session)):
+    from .services import support
+    return support.inbox(db, status)
+
+
+@router.get("/support/{ticket_id}/template/{key}")
+def support_template(ticket_id: int, key: str, db: Session = Depends(get_session)):
+    from .models import SupportTicket
+    from .services import support
+    t = db.get(SupportTicket, ticket_id)
+    if t is None:
+        raise HTTPException(404, "Message not found")
+    return {"text": support.template_text(db, key, t)}
+
+
+class SupportReplyIn(BaseModel):
+    body: str = Field(min_length=1, max_length=10_000)
+    close: bool = False
+
+
+@router.post("/support/{ticket_id}/reply", status_code=201)
+def support_reply(ticket_id: int, body: SupportReplyIn, db: Session = Depends(get_session),
+                  principal: Principal = Depends(require_admin)):
+    from .services import support
+    r = support.reply(db, ticket_id, body.body, principal.actor, body.close)
+    admin.audit(db, "support.reply", str(ticket_id), actor=principal.actor, closed=body.close)
+    db.commit()
+    return {"id": r.id}
+
+
+class SupportStatusIn(BaseModel):
+    status: Literal["open", "closed"]
+
+
+@router.post("/support/{ticket_id}/status")
+def support_status(ticket_id: int, body: SupportStatusIn, db: Session = Depends(get_session),
+                   principal: Principal = Depends(require_admin)):
+    from .services import support
+    t = support.set_status(db, ticket_id, body.status)
+    admin.audit(db, f"support.{body.status}", str(ticket_id), actor=principal.actor)
+    db.commit()
+    return {"id": t.id, "status": t.status}

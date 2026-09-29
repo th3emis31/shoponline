@@ -6,14 +6,15 @@ import { ProductForm, SupplierOrdersTab } from "@/components/admin/DropshipTabs"
 import CampaignsTab from "@/components/admin/CampaignsTab";
 import EmailsTab from "@/components/admin/EmailsTab";
 import ReviewsTab from "@/components/admin/ReviewsTab";
+import SupportTab from "@/components/admin/SupportTab";
 import TeamTab from "@/components/admin/TeamTab";
 import { formatGBP } from "@/lib/money";
 
 const TOKEN_KEY = "novahaus.adminToken";
-type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team" | "emails" | "reviews" | "campaigns";
+type Tab = "orders" | "supplier-orders" | "approvals" | "automation" | "purchase-orders" | "products" | "funnel" | "audit" | "team" | "emails" | "reviews" | "campaigns" | "support";
 const TAB_LABEL: Record<Tab, string> = {
   orders: "Orders", "supplier-orders": "Supplier orders", approvals: "Approvals", automation: "Automation",
-  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team", emails: "Emails", reviews: "Reviews", campaigns: "Campaigns",
+  "purchase-orders": "Purchase orders", products: "Products", funnel: "Funnel", audit: "Audit", team: "Team", emails: "Emails", reviews: "Reviews", campaigns: "Campaigns", support: "Support",
 };
 
 type AdminOrder = {
@@ -114,8 +115,8 @@ export default function AdminPage() {
   }
 
   const tabs: Tab[] = me?.role === "owner"
-    ? ["orders", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "reviews", "emails", "campaigns", "funnel", "audit", "team"]
-    : ["orders", "reviews"];
+    ? ["orders", "support", "supplier-orders", "approvals", "automation", "purchase-orders", "products", "reviews", "emails", "campaigns", "funnel", "audit", "team"]
+    : ["orders", "support", "reviews"];
 
   async function changeStatus(id: string, status: string) {
     const note = window.prompt(`Change order to "${status}". Optional note (e.g. tracking number):`, "");
@@ -240,6 +241,7 @@ export default function AdminPage() {
       {tab === "emails" && <EmailsTab call={call} onError={setError} />}
       {tab === "reviews" && <ReviewsTab call={call} onError={setError} />}
       {tab === "campaigns" && <CampaignsTab call={call} onError={setError} />}
+      {tab === "support" && <SupportTab call={call} onError={setError} />}
 
       {tab === "funnel" && funnel && (
         <>

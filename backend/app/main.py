@@ -15,7 +15,7 @@ from .models import Order, Product, WaitlistSignup
 from .security import require_owner
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
 from .ratelimit import limit
-from .services import analytics, campaigns, emails, payments, reviews, shop, unit_economics
+from .services import analytics, campaigns, emails, payments, reviews, shop, support, unit_economics
 from .services import orders as orders_svc
 from .services.shop import ShopError
 
@@ -232,6 +232,28 @@ def review_submit(order_id: str, body: ReviewIn, db: Session = Depends(get_sessi
     reviews.submit(db, order_id, body.token, body.product_id, body.rating, body.title, body.body)
     db.commit()
     return {"ok": True, "message": "Thank you! Your review will appear once we've checked it (usually within a day)."}
+
+
+# ---------------------------------------------------------------- contact form
+
+class ContactIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    email: EmailStr
+    topic: Literal["order", "return", "product", "other"]
+    message: str = Field(min_length=5, max_length=5000)
+    order_id: str | None = Field(default=None, max_length=36)
+    # Honeypot: hidden from people; bots fill it in.
+    website: str = Field(default="", max_length=200)
+
+
+@app.post("/api/contact", status_code=201, dependencies=[Depends(limit("contact", 5, 600))])
+def contact(body: ContactIn, db: Session = Depends(get_session)):
+    ok = {"ok": True, "message": "Thanks, we've got your message. A person will reply by email within 1 business day."}
+    if body.website.strip():
+        return ok  # quietly drop bot submissions
+    support.create(db, body.name, str(body.email), body.topic, body.message, body.order_id)
+    db.commit()
+    return ok
 
 
 @app.post("/api/webhooks/stripe")

@@ -18,7 +18,7 @@ This tracks every section of the NOVAHAUS Business Blueprint against what the co
 | G | Brand positioning | ✅ | Calm, honest copy. There are no fake reviews, timers or "only X left" badges, and illustrations are labelled. |
 | H | Website: launch pages | ✅ | Home, Shop, Product, Cart and checkout, About, Contact, FAQ, Shipping, Returns, Track, legal pages, 404 |
 | H | Shop "filter by room" | ⬜ | |
-| H | Contact **form** (not only email) | ⬜ | |
+| H | Contact **form** (not only email) | ✅ | `/contact`, with a spam trap and rate limit. The customer gets an automatic acknowledgement |
 | H | Buying guides / blog | ⬜ | |
 | H | Social proof only once real reviews exist | ✅ | Verified-buyer reviews through a signed link (order email and order page). You check them in Admin > Reviews, and negative reviews can't be hidden. The product page and Google rating appear only after the first published review |
 | I | Waitlist smoke test | ✅ | "Notify me" with explicit consent, and sign-ups per product in admin |
@@ -44,7 +44,7 @@ This tracks every section of the NOVAHAUS Business Blueprint against what the co
 | O | Launch criteria: 14 gates tracked in admin | ⬜ | |
 | O | Checkout, payments, webhooks, refunds tested | 🟡 | Test mode is built. Refunds happen in Stripe 👤 |
 | O | Analytics funnel | ✅ | |
-| O | Customer support: inbox, reply templates, 1-business-day target | ⬜ | |
+| O | Customer support: inbox, reply templates, 1-business-day target | ✅ | Admin > Support (owner and staff): 5 reply templates, overdue flags and an on-time rate. The daily report lists messages waiting |
 | O | Mobile Lighthouse performance ≥ 90 | ⬜ | Not measured yet |
 | O | Legal pages professionally reviewed; product safety files | 👤 | |
 | + | Dropshipping (added at your request) | ✅ | Supplier orders with profit per order |
