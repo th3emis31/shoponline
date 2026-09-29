@@ -1,17 +1,21 @@
-import hmac
+from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import get_session
+from .admin_routes import router as admin_router
 from .models import Order, Product
+from .security import require_admin
 from .schemas import AddItemIn, CartOut, CheckoutIn, EconomicsOut, OrderOut, ProductOut
-from .services import payments, shop, unit_economics
+from .services import analytics, payments, shop, unit_economics
 from .services.shop import ShopError
 
 app = FastAPI(title="NOVAHAUS API", version="0.1.0")
+app.include_router(admin_router)
 
 
 @app.exception_handler(ShopError)
@@ -21,14 +25,6 @@ def shop_error_handler(_: Request, exc: ShopError):
 
 def to_public(p: Product) -> ProductOut:
     return ProductOut(id=p.id, name=p.name, price=p.price, is_bundle=p.is_bundle, in_stock=p.stock > 0)
-
-
-def require_admin(x_admin_token: str = Header(default="")):
-    # Fail closed: admin endpoints are disabled unless a token is configured.
-    if not settings.admin_token:
-        raise HTTPException(503, "Admin access is not configured")
-    if not hmac.compare_digest(x_admin_token, settings.admin_token):
-        raise HTTPException(401, "Invalid admin token")
 
 
 @app.get("/api/health")
@@ -73,7 +69,9 @@ def remove_item(cart_id: str, product_id: str, db: Session = Depends(get_session
 def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session)):
     if not payments.payments_enabled():
         # Development mode: no payment provider configured, order is just placed.
-        return shop.order_view(shop.checkout(db, cart_id, body.name, str(body.email), body.address))
+        order = shop.checkout(db, cart_id, body.name, str(body.email), body.address)
+        analytics.record(db, "purchase")
+        return shop.order_view(order)
 
     # Stock is reserved now and released if payment fails or the session expires.
     # The cart is kept until Stripe accepts the session, so an outage never loses it.
@@ -90,6 +88,18 @@ def checkout(cart_id: str, body: CheckoutIn, db: Session = Depends(get_session))
     db.delete(shop.get_cart(db, cart_id))
     db.commit()
     return {**shop.order_view(order), "checkout_url": url}
+
+
+class EventIn(BaseModel):
+    type: Literal["view_product", "add_to_cart", "begin_checkout"]
+    product_id: str | None = Field(default=None, max_length=64)
+
+
+@app.post("/api/events", status_code=204)
+def track_event(body: EventIn, db: Session = Depends(get_session)):
+    # Unknown product IDs are dropped so the table can't be filled with junk.
+    product_id = body.product_id if body.product_id and db.get(Product, body.product_id) else None
+    analytics.record(db, body.type, product_id)
 
 
 @app.post("/api/webhooks/stripe")

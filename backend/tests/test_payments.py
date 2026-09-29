@@ -190,3 +190,21 @@ def test_session_params_are_correct(monkeypatch):
     assert p["shipping_options"][0]["shipping_rate_data"]["fixed_amount"] == {"amount": 395, "currency": "gbp"}
     assert captured["options"] == {"idempotency_key": "checkout-ord-1"}
     assert p["expires_at"] >= time.time() + 29 * 60
+
+
+def test_payment_for_cancelled_order_goes_to_review(client, db, stripe_on):
+    order = place_order(client).json()
+    send_event(client, session_event(order["id"], "checkout.session.expired", "evt_exp"))
+    assert order_status(db, order["id"]) == "cancelled"
+    send_event(client, session_event(order["id"], event_id="evt_paid_late", amount_total=order["total"]))
+    assert order_status(db, order["id"]) == "payment_review"
+
+
+def test_paid_webhook_records_purchase_event(client, db, stripe_on):
+    from app.models import AnalyticsEvent
+    order = place_order(client).json()
+    with db() as s:
+        assert s.query(AnalyticsEvent).filter_by(type="purchase").count() == 0
+    send_event(client, session_event(order["id"], amount_total=order["total"]))
+    with db() as s:
+        assert s.query(AnalyticsEvent).filter_by(type="purchase").count() == 1

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -59,7 +59,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    # placed (no payments configured) | pending_payment | paid | cancelled | payment_review
+    # placed (no payments configured) | pending_payment | paid | shipped | cancelled | payment_review
     status: Mapped[str] = mapped_column(String(20), default="placed")
     customer_name: Mapped[str] = mapped_column(String(200))
     customer_email: Mapped[str] = mapped_column(String(320), index=True)
@@ -96,3 +96,26 @@ class StripeEvent(Base):
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     type: Mapped[str] = mapped_column(String(100))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AnalyticsEvent(Base):
+    """Anonymous funnel event. No cookies, IDs or personal data are stored."""
+
+    __tablename__ = "analytics_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    type: Mapped[str] = mapped_column(String(32), index=True)
+    product_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+
+class AdminAudit(Base):
+    """Every admin write: what changed, from what, to what, and why."""
+
+    __tablename__ = "admin_audit"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    action: Mapped[str] = mapped_column(String(64))
+    target: Mapped[str] = mapped_column(String(100))
+    detail: Mapped[str] = mapped_column(Text)  # JSON
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

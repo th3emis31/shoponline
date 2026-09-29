@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AddToCart from "@/components/AddToCart";
+import TrackView from "@/components/TrackView";
 import { getProduct } from "@/lib/api";
 import { formatGBP } from "@/lib/money";
 import { site } from "@/lib/site";
@@ -21,6 +22,7 @@ export default async function ProductPage({ params }: Props) {
 
   return (
     <div className="product">
+      <TrackView productId={product.id} />
       <div className="ph" aria-hidden="true">Photos will be taken from the sample in hand</div>
       <div>
         {product.is_bundle && <span className="badge">Bundle</span>}

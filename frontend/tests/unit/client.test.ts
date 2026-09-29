@@ -19,12 +19,17 @@ function respond(status: number, body: unknown) {
   return Promise.resolve(new Response(JSON.stringify(body), { status }));
 }
 
-let fetchMock: ReturnType<typeof vi.fn>;
+type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+let fetchMock: ReturnType<typeof vi.fn<FetchFn>>;
 
 beforeEach(() => {
   vi.stubGlobal("window", { localStorage: memoryStorage(), sessionStorage: memoryStorage() });
-  fetchMock = vi.fn();
-  vi.stubGlobal("fetch", fetchMock);
+  fetchMock = vi.fn<FetchFn>();
+  // Analytics calls are fire-and-forget; answer them separately so they
+  // don't consume the responses queued for the call under test.
+  const eventsMock = (url: string, init?: RequestInit) =>
+    url === "/api/events" ? Promise.resolve(new Response(null, { status: 204 })) : fetchMock(url, init);
+  vi.stubGlobal("fetch", vi.fn(eventsMock));
 });
 
 describe("cart client", () => {
@@ -65,5 +70,17 @@ describe("cart client", () => {
     fetchMock.mockReturnValueOnce(respond(502, { error: "Payment provider unavailable, please try again" }));
     await expect(checkout("c1", { name: "J", email: "j@example.com", address: "x" })).rejects.toThrow(/Payment provider/);
     expect(window.localStorage.getItem("novahaus.cartId")).toBe("c1");
+  });
+});
+
+describe("track", () => {
+  it("never throws, even when the network fails", async () => {
+    const { track } = await import("@/lib/client");
+    const failing = vi.fn(() => Promise.reject(new Error("offline")));
+    vi.stubGlobal("fetch", failing);
+    expect(() => track("view_product", "desk-mat")).not.toThrow();
+    await new Promise((r) => setTimeout(r, 0));
+    const body = JSON.parse((failing.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body).toEqual({ type: "view_product", product_id: "desk-mat" });
   });
 });

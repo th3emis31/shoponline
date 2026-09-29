@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import Order, Product, StripeEvent
+from . import analytics
 from .shop import ShopError
 
 CURRENCY = "gbp"
@@ -91,7 +92,12 @@ def _order_for_session(db: Session, session: dict) -> Order | None:
     return order
 
 
-def _mark_paid(order: Order, session: dict) -> None:
+def _mark_paid(db: Session, order: Order, session: dict) -> None:
+    if order.status == "cancelled":
+        # Money arrived for an order already cancelled (stock released):
+        # never ship or ignore it silently — a human must review / refund.
+        order.status = "payment_review"
+        return
     if order.status != "pending_payment":
         return
     amount_ok = session.get("amount_total") == order.total
@@ -99,6 +105,7 @@ def _mark_paid(order: Order, session: dict) -> None:
     if amount_ok and currency_ok:
         order.status = "paid"
         order.paid_at = datetime.now(timezone.utc)
+        analytics.record(db, "purchase", commit=False)
     else:
         # Never ship on a mismatched amount; a human must review.
         order.status = "payment_review"
@@ -120,10 +127,10 @@ def handle_event(db: Session, event: dict) -> str:
         if order is not None:
             if event_type == "checkout.session.completed":
                 if session.get("payment_status") == "paid":
-                    _mark_paid(order, session)
+                    _mark_paid(db, order, session)
                 outcome = order.status
             elif event_type == "checkout.session.async_payment_succeeded":
-                _mark_paid(order, session)
+                _mark_paid(db, order, session)
                 outcome = order.status
             elif event_type in ("checkout.session.expired", "checkout.session.async_payment_failed"):
                 if order.status == "pending_payment":

@@ -4,7 +4,28 @@ A small, dependency-free online shop for **NOVAHAUS**, calm small-space organisa
 
 > Status: **prototype for the "Desk Reset" validation test.** Every price and cost is an ESTIMATE until real supplier quotes replace it. No live payments.
 
-## Features
+## Run it on your PC (Windows): quick start
+
+1. Install these once, and tick **"Add python.exe to PATH"** when installing Python:
+   - [Git](https://git-scm.com/download/win)
+   - [Python 3.11+](https://www.python.org/downloads/)
+   - [Node.js LTS](https://nodejs.org/)
+2. Open **Command Prompt** and run:
+   ```bat
+   cd %USERPROFILE%
+   git clone https://github.com/th3emis31/shoponline.git
+   cd shoponline
+   run-local.cmd
+   ```
+3. The first run takes a few minutes, because it installs packages, creates the database and adds the products. Two server windows open, and then your browser opens:
+   - Shop: http://localhost:3000
+   - Admin: http://localhost:3000/admin (the token is printed at the end and stored in `backend\.env`)
+   - API docs: http://localhost:8000/docs
+4. To stop, close the two server windows. To start again, run `run-local.cmd` again. It's safe to re-run and never deletes your data.
+
+By default it uses a local SQLite file (`backend\novahaus.db`) and payments are off. To use PostgreSQL or Stripe test mode, edit `backend\.env` (see `backend\.env.example`).
+
+## Features (Node prototype, `src/`)
 - Catalogue of the 4 shortlisted test products plus the Desk Reset bundle (prices in £, inc. VAT)
 - Cart: add or remove items, with stock and quantity limits
 - Guest checkout: asks only for name, email and address; the total is shown before ordering
@@ -90,8 +111,18 @@ npm run build && npm run test:e2e              # browser tests, desktop + mobile
 
 **Before launch:** fill in every `TODO` in `frontend/lib/site.ts` and on the Shipping, Returns and legal pages. The legal pages are placeholders that need professional review.
 
+## Admin and analytics
+
+- **Admin** is at `/admin` and needs the `ADMIN_TOKEN` from `backend/.env`. It has four tabs:
+  - **Orders:** mark orders shipped or cancelled. The allowed status changes are enforced, cancelling releases the stock, and paid orders can't be cancelled here (refunds go through Stripe first).
+  - **Products:** price, landed cost, stock and visibility, plus each product's live contribution and **break-even ROAS**.
+  - **Funnel:** conversion over the last 30 days.
+  - **Audit log:** every admin change, with its before and after values and your reason.
+- **Funnel tracking:** view product → add to cart → begin checkout → purchase. It stores anonymous counts only: no cookies, no visitor IDs, no personal data. Purchases are recorded by the server, so a browser can't fake them.
+- **Safety net:** if a payment arrives for an order that was already cancelled, the order goes to `payment_review` for a human to check, rather than being ignored.
+
 ## Next steps (pending blueprint approval)
 - Pick the stack: Blueprint section K recommends FastAPI + PostgreSQL + Next.js; Shopify is the faster alternative
-- Admin app (orders, stock, live break-even ROAS)
-- Analytics funnel events: view → add-to-cart → checkout → purchase
+- Separate admin logins per person (a single token for now)
+- Deploy: production host, domain, live Stripe keys (launch gate, section O)
 - Real product specs and photos once samples arrive
